@@ -398,9 +398,16 @@ function AppContent() {
       }
     });
 
-    setRequests([...newlyCreatedRequests, ...updatedRequests]);
-    setOffers((prev) => prev.filter((o) => o.id !== offerId));
+    const finalRequests = [...newlyCreatedRequests, ...updatedRequests];
+    setRequests(finalRequests);
+    setOffers((prev) => {
+      const finalOffers = prev.filter((o) => o.id !== offerId);
+      localStorage.setItem('kongshan_carpool_offers_v2', JSON.stringify(finalOffers));
+      return finalOffers;
+    });
+    localStorage.setItem('kongshan_carpool_requests_v2', JSON.stringify(finalRequests));
     deleteOfferFromFirestore(offerId).catch(console.warn);
+    alert(language === 'en' ? 'Vehicle deleted successfully.' : '車輛已成功刪除！');
   };
 
   // Action: Eject an individual passenger from a vehicle
@@ -635,8 +642,13 @@ function AppContent() {
       );
     }
 
-    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    setRequests((prev) => {
+      const finalRequests = prev.filter((r) => r.id !== requestId);
+      localStorage.setItem('kongshan_carpool_requests_v2', JSON.stringify(finalRequests));
+      return finalRequests;
+    });
     deleteRequestFromFirestore(requestId).catch(console.warn);
+    alert(language === 'en' ? 'Ride request deleted successfully.' : '需求已成功刪除！');
   };
 
   // Action: Cancel a ride request

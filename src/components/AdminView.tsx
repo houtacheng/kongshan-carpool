@@ -492,7 +492,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         authProvider: 'google',
         registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
         lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-        note: isSuper ? '系統總幹事' : '報名報到組幹事'
+        note: isSuper ? '系統總護持' : '報名報到組組長'
       };
 
       onAddAccount(newAccount);
@@ -555,7 +555,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       authProvider: 'google',
       registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
       lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-      note: isSuper ? '系統總幹事' : '報名報到組幹事'
+      note: isSuper ? '系統總護持' : '報名報到組組長'
     };
     onAddAccount(newAcc);
     onLoginWithGoogle(newAcc);
@@ -823,7 +823,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <p>
               {language === 'en'
                 ? 'Only verified and active staff accounts can view unmasked passenger phone numbers and WhatsApp IDs.'
-                : '本後台含有信眾與同修之個人電話與聯絡方式，唯有經系統總幹事審核啟用之 Google 帳號方可存取。'}
+                : '本後台含有信眾與同修之個人電話與聯絡方式，唯有經系統總護持審核啟用之 Google 帳號方可存取。'}
             </p>
           </div>
         </div>

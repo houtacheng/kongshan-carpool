@@ -1,6 +1,6 @@
 export type ParticipantRole = 'volunteer' | 'attendee'; // 義工 (提早到協助) | 正行 (活動參加者)
 
-export type AdminRole = 'super_admin' | 'staff'; // 系統總幹事 / 超級管理員 | 報名報到組幹部
+export type AdminRole = 'super_admin' | 'staff'; // 系統總護持 / 超級管理員 | 報名報到組組長
 export type AccountStatus = 'active' | 'suspended' | 'pending'; // 正常使用 | 暫停權限 | 審核中
 
 export interface AdminAccount {

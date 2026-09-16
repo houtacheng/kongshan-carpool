@@ -15,7 +15,7 @@ export const INITIAL_ADMIN_ACCOUNTS: AdminAccount[] = [
   {
     id: 'admin-super-1',
     email: 'houtacheng@gmail.com',
-    name: '系統總幹事',
+    name: '系統總護持',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
     role: 'super_admin',
     status: 'active',
@@ -46,7 +46,7 @@ export const INITIAL_ADMIN_ACCOUNTS: AdminAccount[] = [
     authProvider: 'google',
     registeredAt: '2026-09-12 09:15',
     lastLoginAt: '2026-09-14 11:05',
-    note: '新澤西與康州線路協調幹事'
+    note: '新澤西與康州線路協調組長'
   }
 ];
 
