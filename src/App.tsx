@@ -62,7 +62,13 @@ function AppContent() {
     const saved = localStorage.getItem('kongshan_current_admin_user_v2');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && (parsed.name === '系統總幹事' || parsed.note?.includes('總幹事'))) {
+          parsed.name = '系統總護持';
+          if (parsed.note) parsed.note = parsed.note.replace('總幹事', '總護持');
+          localStorage.setItem('kongshan_current_admin_user_v2', JSON.stringify(parsed));
+        }
+        return parsed;
       } catch (e) {
         console.error('Failed to parse saved current admin', e);
       }

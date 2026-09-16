@@ -69,11 +69,11 @@ export const EventManagerModal: React.FC<EventManagerModalProps> = ({
     const nextStatus: EventStatus = evt.status === 'published' ? 'hidden' : 'published';
     const updated = { ...evt, status: nextStatus };
     onSaveEvent(updated);
-    setSuccessMsg(
-      nextStatus === 'published'
-        ? (language === 'en' ? `Published: ${evt.title}` : `已公開發布【${evt.title}】，前台大眾即刻可見`)
-        : (language === 'en' ? `Hidden: ${evt.title}` : `已將【${evt.title}】設為隱藏，僅內部幹部可見`)
-    );
+    const feedback = nextStatus === 'published'
+      ? (language === 'en' ? `【${evt.title}】is now Published! Visible to all public.` : `已公開發布【${evt.title}】，前台大眾即刻可見！`)
+      : (language === 'en' ? `【${evt.title}】is now Hidden. Only visible to staff.` : `已將【${evt.title}】設為內部隱藏，前台信眾將無法看見。`);
+    setSuccessMsg(feedback);
+    alert(feedback);
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
@@ -85,7 +85,9 @@ export const EventManagerModal: React.FC<EventManagerModalProps> = ({
 
     if (window.confirm(`${t.deleteEventConfirm}\n(${evt.title})`)) {
       onDeleteEvent(evt.id);
-      setSuccessMsg(language === 'en' ? `Deleted: ${evt.title}` : `已刪除法會：${evt.title}`);
+      const feedback = language === 'en' ? `Deleted: ${evt.title}` : `已成功刪除法會營隊：${evt.title}`;
+      setSuccessMsg(feedback);
+      alert(feedback);
       setTimeout(() => setSuccessMsg(''), 3000);
     }
   };
@@ -408,10 +410,10 @@ export const EventManagerModal: React.FC<EventManagerModalProps> = ({
                         {/* Toggle Publish/Hide */}
                         <button
                           onClick={() => handleToggleStatus(evt)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer border ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer border shadow-xs ${
                             isPub
-                              ? 'bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-300'
-                              : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'
+                              ? 'bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-300'
+                              : 'bg-amber-700 hover:bg-amber-800 text-white border-amber-800'
                           }`}
                         >
                           {isPub ? (
