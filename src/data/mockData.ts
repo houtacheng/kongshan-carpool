@@ -1,4 +1,4 @@
-import type { Event, CarpoolOffer, RideRequest } from '../types';
+import type { Event, CarpoolOffer, RideRequest, AdminAccount } from '../types';
 
 export const EAST_COAST_AREAS = [
   '全美東區域',
@@ -11,6 +11,45 @@ export const EAST_COAST_AREAS = [
   '康州 Connecticut (CT)',
 ];
 
+export const INITIAL_ADMIN_ACCOUNTS: AdminAccount[] = [
+  {
+    id: 'admin-super-1',
+    email: 'houtacheng@gmail.com',
+    name: '系統總幹事',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
+    role: 'super_admin',
+    status: 'active',
+    authProvider: 'google',
+    registeredAt: '2026-09-01 10:00',
+    lastLoginAt: '2026-09-16 06:30',
+    note: '系統最高權限（可管理帳號權限與所有營隊）'
+  },
+  {
+    id: 'admin-staff-1',
+    email: 'checkin.volunteer@gmail.com',
+    name: '李同修 (報到組幹部)',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
+    role: 'staff',
+    status: 'active',
+    authProvider: 'google',
+    registeredAt: '2026-09-10 14:20',
+    lastLoginAt: '2026-09-15 19:40',
+    note: '紐約法拉盛、曼哈頓與長島線路協調幹部'
+  },
+  {
+    id: 'admin-staff-2',
+    email: 'volunteer.lin@gmail.com',
+    name: '林師姐 (報到組車長)',
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
+    role: 'staff',
+    status: 'active',
+    authProvider: 'google',
+    registeredAt: '2026-09-12 09:15',
+    lastLoginAt: '2026-09-14 11:05',
+    note: '新澤西與康州線路協調幹事'
+  }
+];
+
 export const INITIAL_EVENTS: Event[] = [
   {
     id: 'evt-2026-pucha',
@@ -20,8 +59,8 @@ export const INITIAL_EVENTS: Event[] = [
     date: '2026年9月27日（週日）',
     templeName: '空山寺 (Kong Shan Temple)',
     location: '174 Hynes RD, Poughquag, NY 12570',
+    status: 'published',
     volunteerArrivalTime: '08:00 前抵達寺院（素烤備料、會場佈置、報名報到組）',
-
     attendeeArrivalTime: '09:00 ~ 09:30 入寺，09:30 湖畔集合',
     assemblyNotes: '午間於湖畔共享素烤盛宴，下午由各班分享學習心得與修學收穫，並進行廣論快問快答。美東各區車程約 1.5 ~ 2 小時，請大家寬裕估算時間。',
     reminders: [
@@ -41,10 +80,62 @@ export const INITIAL_EVENTS: Event[] = [
       { time: '14:00 ~ 15:30', activity: '湖畔總結與快問快答', detail: '各班學習總結 (45 min) • 廣論快問快答：業果 (20 min) • 空山寺總結+結示 (25 min)', highlight: true },
       { time: '15:30 ~ 16:30', activity: '善後整理 / 賦歸', detail: '正行大眾賦歸（15:30）/ 義工善後整理完畢賦歸（16:30）' }
     ]
+  },
+  {
+    id: 'evt-2026-winter-buddha7',
+    title: '2026 冬季彌陀佛七精進共修營',
+    theme: '《念念彌陀．一心不亂》——念佛成佛，同登安養',
+    subtitle: '萬緣放下，攝心歸一。誠邀法友同修精進持名，共結淨土殊勝勝緣。',
+    date: '2026年12月19日（週六）~ 12月25日（週五）',
+    templeName: '空山寺 (Kong Shan Temple)',
+    location: '174 Hynes RD, Poughquag, NY 12570',
+    status: 'published',
+    volunteerArrivalTime: '07:30 前抵達大殿集合（執事分工與護七行前會）',
+    attendeeArrivalTime: '08:30 前辦理入堂掛單',
+    assemblyNotes: '共修期間提供住宿掛單與營養蔬食，請自備海青、居士服及個人盥洗用具。',
+    reminders: [
+      '請穿著深色寬鬆長褲，自備黑色海青與縵衣。',
+      '堂內全程禁語，請關閉手機等電子產品。',
+      '山區冬日氣候寒冷，請自備保暖外套、厚襪。'
+    ],
+    schedule: [
+      { time: '05:00 ~ 06:30', activity: '早課持名', detail: '大殿早課共修' },
+      { time: '08:30 ~ 11:00', activity: '精進繞佛念佛', detail: '止靜、繞佛、默念持名', highlight: true },
+      { time: '11:15 ~ 12:30', activity: '過堂用齋 / 經行', detail: '惜福用齋' },
+      { time: '14:00 ~ 17:00', activity: '下午念佛共修', detail: '大殿共修持名', highlight: true },
+      { time: '19:00 ~ 20:30', activity: '法師開示與大回向', detail: '聆聽淨土法門開示', highlight: true }
+    ]
+  },
+  {
+    id: 'evt-2026-youth-zen',
+    title: '2026 青年身心舒壓精進禪修營',
+    theme: '《靜心觀照．覺醒當下》——回歸本來面目',
+    subtitle: '在山林晨光與空山湖畔中，體驗行住坐臥的寧靜與身心覺察。',
+    date: '2026年11月07日（週六）',
+    templeName: '空山寺 (Kong Shan Temple)',
+    location: '174 Hynes RD, Poughquag, NY 12570',
+    status: 'hidden',
+    volunteerArrivalTime: '08:00 前抵達（會場與茶席佈置）',
+    attendeeArrivalTime: '09:00 報到集合',
+    assemblyNotes: '本營隊目前籌備中，僅對內部工作幹部開放排班調度。',
+    reminders: [
+      '請穿著素色寬鬆衣物，勿噴灑香水。',
+      '請自備水杯、瑜珈墊或禪坐墊（寺院亦備有坐蒲）。'
+    ],
+    schedule: [
+      { time: '09:30 ~ 10:30', activity: '初階禪修引導', detail: '調身調息調心技巧' },
+      { time: '10:45 ~ 11:45', activity: '湖畔經行', detail: '步步分明覺察當下', highlight: true },
+      { time: '12:00 ~ 13:30', activity: '正念便當與午休', detail: '正念飲食體驗' },
+      { time: '14:00 ~ 16:00', activity: '茶禪一味與心得交流', detail: '茶道與禪心分享', highlight: true }
+    ]
   }
 ];
 
 export function getLocalizedEvent(evt: Event, lang: 'zh-TW' | 'zh-CN' | 'en'): Event {
+  if (evt.id !== 'evt-2026-pucha') {
+    return evt;
+  }
+
   if (lang === 'en') {
     return {
       ...evt,

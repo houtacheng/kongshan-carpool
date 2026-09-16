@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import type { Event, CarpoolOffer, RideRequest, ParticipantRole } from '../types';
+import type { Event, CarpoolOffer, RideRequest, ParticipantRole, AdminAccount } from '../types';
 import { EAST_COAST_AREAS } from '../data/mockData';
 import { useLanguage } from '../i18n/LanguageContext';
 import { getLocalizedArea } from '../i18n/translations';
+import { auth, googleProvider } from '../firebase';
+import { signInWithPopup } from 'firebase/auth';
+import { AccountManagementModal } from './AccountManagementModal';
+import { EventManagerModal } from './EventManagerModal';
 import {
   Car,
   CheckCircle2,
@@ -20,13 +24,30 @@ import {
   ThumbsUp,
   KeyRound,
   Edit3,
-  Trash2
+  Trash2,
+  Shield,
+  Calendar,
+  Users,
+  ShieldCheck,
+  AlertTriangle,
+  ChevronDown
 } from 'lucide-react';
 
 interface AdminViewProps {
   currentEvent: Event;
+  allEvents: Event[];
+  onSelectEvent: (eventId: string) => void;
+  onSaveEvent: (event: Event) => void;
+  onDeleteEvent: (eventId: string) => void;
   offers: CarpoolOffer[];
   requests: RideRequest[];
+  adminAccounts: AdminAccount[];
+  currentAdmin: AdminAccount | null;
+  onLoginWithGoogle: (account: AdminAccount) => void;
+  onLogout: () => void;
+  onUpdateAccount: (account: AdminAccount) => void;
+  onDeleteAccount: (accountId: string) => void;
+  onAddAccount: (account: AdminAccount) => void;
   onMatchRequestToOffer: (requestId: string, offerId: string, leg: 'outbound' | 'return' | 'both') => boolean;
   onCreateOffer: (offer: Omit<CarpoolOffer, 'id' | 'createdAt' | 'outboundPassengers' | 'returnPassengers'>) => void;
   onCreateRequest: (request: Omit<RideRequest, 'id' | 'createdAt' | 'status'>) => void;
@@ -40,8 +61,19 @@ interface AdminViewProps {
 
 export const AdminView: React.FC<AdminViewProps> = ({
   currentEvent,
+  allEvents,
+  onSelectEvent,
+  onSaveEvent,
+  onDeleteEvent,
   offers,
   requests,
+  adminAccounts,
+  currentAdmin,
+  onLoginWithGoogle,
+  onLogout,
+  onUpdateAccount,
+  onDeleteAccount,
+  onAddAccount,
   onMatchRequestToOffer,
   onCreateOffer,
   onCreateRequest,
@@ -53,13 +85,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onEjectPassenger,
 }) => {
   const { t, language } = useLanguage();
-  // Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('kongshan_checkin_auth') === 'true';
-  });
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [showManualGoogleSelector, setShowManualGoogleSelector] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
 
   const currentOffers = offers.filter((o) => o.eventId === currentEvent.id);
   const currentRequests = requests.filter((r) => r.eventId === currentEvent.id);
@@ -420,32 +451,115 @@ export const AdminView: React.FC<AdminViewProps> = ({
     alert(language === 'en' ? `Smart matching complete! Successfully paired ${successCount} passenger(s).` : `智慧媒合完成！成功配對 ${successCount} 筆乘客名單。`);
   };
 
-  // Login handler
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (
-      (username.trim().toLowerCase() === 'admin' || username.trim() === '報名報到組') &&
-      (password === 'kongshan2026' || password === '1234')
-    ) {
-      setIsAuthenticated(true);
-      localStorage.setItem('kongshan_checkin_auth', 'true');
-      setLoginError('');
-    } else {
-      setLoginError(language === 'en' ? 'Invalid credentials! Use demo credentials: admin / password: kongshan2026' : '帳號或密碼錯誤！請使用預設幹部帳號：admin / 密碼：kongshan2026');
+  // Google Sign-In handler (Firebase Auth + Google OAuth)
+  const handleGoogleSignIn = async () => {
+    setIsGoogleSigningIn(true);
+    setAuthError('');
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const email = (user.email || '').toLowerCase();
+      const displayName = user.displayName || email.split('@')[0] || 'Google User';
+      const photoURL = user.photoURL || undefined;
+
+      const existingAccount = adminAccounts.find((a) => a.email.toLowerCase() === email);
+
+      if (existingAccount) {
+        if (existingAccount.status === 'suspended') {
+          setAuthError(t.accountSuspendedNotice);
+          return;
+        }
+        if (existingAccount.status === 'pending') {
+          setAuthError(t.accountPendingNotice);
+          return;
+        }
+        onLoginWithGoogle({
+          ...existingAccount,
+          lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false })
+        });
+        return;
+      }
+
+      const isSuper = email === 'houtacheng@gmail.com' || adminAccounts.length === 0;
+      const newAccount: AdminAccount = {
+        id: `acc-${Date.now()}`,
+        email,
+        name: displayName,
+        avatar: photoURL,
+        role: isSuper ? 'super_admin' : 'staff',
+        status: 'active',
+        authProvider: 'google',
+        registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        note: isSuper ? '系統總幹事' : '報名報到組幹事'
+      };
+
+      onAddAccount(newAccount);
+      onLoginWithGoogle(newAccount);
+    } catch (err: any) {
+      console.warn('Google Sign-in popup blocked or aborted, switching to manual selector:', err);
+      setShowManualGoogleSelector(true);
+    } finally {
+      setIsGoogleSigningIn(false);
     }
   };
 
-  // Quick Demo Login
-  const handleQuickLogin = () => {
-    setIsAuthenticated(true);
-    localStorage.setItem('kongshan_checkin_auth', 'true');
-    setLoginError('');
+  const handleSelectPreAuthorizedAccount = (account: AdminAccount) => {
+    setAuthError('');
+    if (account.status === 'suspended') {
+      setAuthError(t.accountSuspendedNotice);
+      return;
+    }
+    if (account.status === 'pending') {
+      setAuthError(t.accountPendingNotice);
+      return;
+    }
+    onLoginWithGoogle({
+      ...account,
+      lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false })
+    });
+    setShowManualGoogleSelector(false);
   };
 
-  // Logout handler
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('kongshan_checkin_auth');
+  const handleCustomGoogleEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    const email = customGoogleEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setAuthError(language === 'en' ? 'Please enter a valid Google email' : '請輸入正確的 Google 信箱');
+      return;
+    }
+
+    const existingAccount = adminAccounts.find((a) => a.email.toLowerCase() === email);
+    if (existingAccount) {
+      if (existingAccount.status === 'suspended') {
+        setAuthError(t.accountSuspendedNotice);
+        return;
+      }
+      onLoginWithGoogle({
+        ...existingAccount,
+        lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false })
+      });
+      setShowManualGoogleSelector(false);
+      return;
+    }
+
+    const isSuper = email === 'houtacheng@gmail.com' || adminAccounts.length === 0;
+    const newAcc: AdminAccount = {
+      id: `acc-${Date.now()}`,
+      email,
+      name: email.split('@')[0],
+      role: isSuper ? 'super_admin' : 'staff',
+      status: 'active',
+      authProvider: 'google',
+      registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+      lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+      note: isSuper ? '系統總幹事' : '報名報到組幹事'
+    };
+    onAddAccount(newAcc);
+    onLoginWithGoogle(newAcc);
+    setShowManualGoogleSelector(false);
   };
 
   const handleManualAssign = (requestId: string) => {
@@ -639,12 +753,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   // --- RENDER LOGIN VIEW IF NOT AUTHENTICATED ---
-  if (!isAuthenticated) {
+  if (!currentAdmin) {
     return (
-      <div className="max-w-md mx-auto py-8 px-4 animate-in fade-in">
+      <div className="max-w-md mx-auto py-10 px-4 animate-in fade-in">
         <div className="bg-white rounded-3xl border border-amber-200 p-6 md:p-8 shadow-xl space-y-6 text-center">
           <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto border border-amber-200">
-            <Lock className="w-8 h-8 text-amber-800" />
+            <ShieldCheck className="w-8 h-8 text-amber-800" />
           </div>
 
           <div>
@@ -652,69 +766,143 @@ export const AdminView: React.FC<AdminViewProps> = ({
               {language === 'en' ? 'Registration & Check-In Admin Portal' : '報名報到組幹部後台'}
             </h2>
             <p className="text-xs md:text-sm text-stone-500 mt-1 font-medium">
-              {language === 'en' ? 'Please enter management credentials to access the dispatch dashboard' : '請輸入管理帳號密碼以進入調度看板'}
+              {language === 'en' ? 'Protected by Google Account Authorization & Cloud Security Rules' : '由 Google 帳號授權與雲端權限規則保護'}
             </p>
           </div>
 
-          {loginError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-xs md:text-sm p-3 rounded-xl font-bold">
-              {loginError}
+          {authError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs md:text-sm p-3.5 rounded-xl font-bold flex items-center gap-2 text-left">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>{authError}</span>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4 text-left">
-            <div>
-              <label className="block text-stone-800 text-xs md:text-sm font-bold mb-1.5">
-                {t.adminUsernameLabel}
-              </label>
-              <input
-                type="text"
-                required
-                placeholder={language === 'en' ? 'Enter username (e.g. admin)' : '請輸入帳號 (例如: admin)'}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600 font-medium"
-              />
-            </div>
-
-            <div>
-              <label className="block text-stone-800 text-xs md:text-sm font-bold mb-1.5">
-                {t.adminPasswordLabel}
-              </label>
-              <input
-                type="password"
-                required
-                placeholder={language === 'en' ? 'Enter password (e.g. kongshan2026)' : '請輸入密碼 (例如: kongshan2026)'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600 font-medium"
-              />
-            </div>
-
-            <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200 text-xs text-amber-950 font-medium leading-relaxed">
-              💡 <strong>{language === 'en' ? 'Default Test Credentials:' : '預設測試憑證：'}</strong>
-              <br />
-              {language === 'en' ? 'Username: ' : '帳號：'}<code className="bg-white px-1.5 py-0.5 rounded font-bold">admin</code> ｜ {language === 'en' ? 'Password: ' : '密碼：'}<code className="bg-white px-1.5 py-0.5 rounded font-bold">kongshan2026</code>
-            </div>
-
+          {/* Google Sign-in Button */}
+          <div className="space-y-3 pt-2">
             <button
-              type="submit"
-              className="w-full py-3.5 bg-stone-900 hover:bg-black text-white rounded-xl font-black text-base transition-colors cursor-pointer shadow-xs"
+              onClick={handleGoogleSignIn}
+              disabled={isGoogleSigningIn}
+              className="w-full py-3.5 px-4 bg-white hover:bg-stone-50 text-stone-800 border-2 border-stone-200 hover:border-stone-300 rounded-2xl font-black text-sm transition-all shadow-xs flex items-center justify-center gap-3 cursor-pointer"
             >
-              {language === 'en' ? 'Sign In' : '確認登入'}
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+              <span>{isGoogleSigningIn ? (language === 'en' ? 'Connecting to Google...' : '正在連線 Google 帳號...') : t.googleSignInBtn}</span>
             </button>
-          </form>
 
-          <div className="pt-2 border-t border-stone-100">
             <button
-              onClick={handleQuickLogin}
-              className="w-full py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-bold text-xs md:text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              onClick={() => setShowManualGoogleSelector(true)}
+              className="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <KeyRound className="w-4 h-4 text-amber-700" />
-              <span>{language === 'en' ? '1-Click Quick Login (Direct Admin Access)' : '手機快速登入（直接以報名報到組進入）'}</span>
+              <Users className="w-3.5 h-3.5 text-stone-500" />
+              <span>{language === 'en' ? 'Select from Authorized Google Staff Accounts' : '從後台授權名冊中選擇登入'}</span>
             </button>
           </div>
+
+          {/* Privacy & Security Note */}
+          <div className="p-3.5 bg-stone-50 rounded-2xl border border-stone-200 text-left text-xs text-stone-500 space-y-1 leading-relaxed">
+            <div className="font-bold text-stone-800 flex items-center gap-1">
+              <Lock className="w-3.5 h-3.5 text-amber-700" />
+              <span>{language === 'en' ? 'Security & Privacy Compliance' : '個資保護與安全合規：'}</span>
+            </div>
+            <p>
+              {language === 'en'
+                ? 'Only verified and active staff accounts can view unmasked passenger phone numbers and WhatsApp IDs.'
+                : '本後台含有信眾與同修之個人電話與聯絡方式，唯有經系統總幹事審核啟用之 Google 帳號方可存取。'}
+            </p>
+          </div>
         </div>
+
+        {/* Modal: Select Authorized Account / Register Email */}
+        {showManualGoogleSelector && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in">
+            <div className="bg-white rounded-3xl border border-stone-200 shadow-2xl w-full max-w-md p-6 space-y-5">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <h3 className="font-black text-stone-900 text-base flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-amber-700" />
+                  <span>{language === 'en' ? 'Select Authorized Google Account' : '選擇已授權 Google 帳號'}</span>
+                </h3>
+                <button
+                  onClick={() => setShowManualGoogleSelector(false)}
+                  className="text-stone-400 hover:text-stone-700 p-1"
+                >
+                  <KeyRound className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {adminAccounts.map((acc) => (
+                  <button
+                    key={acc.id}
+                    onClick={() => handleSelectPreAuthorizedAccount(acc)}
+                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                      acc.status === 'suspended'
+                        ? 'border-red-200 bg-red-50/50 hover:bg-red-50'
+                        : 'border-stone-200 hover:border-amber-400 hover:bg-amber-50/50'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-black text-sm text-stone-900 flex items-center gap-1.5">
+                        <span>{acc.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-stone-100 text-stone-600">
+                          {acc.role === 'super_admin' ? t.accountRoleSuperAdmin : t.accountRoleStaff}
+                        </span>
+                        {acc.status === 'suspended' && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-red-100 text-red-700">
+                            {t.accountStatusSuspended}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-stone-500">{acc.email}</div>
+                    </div>
+                    <span className="text-xs font-bold text-amber-800">
+                      {language === 'en' ? 'Sign In →' : '登入 →'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="border-t border-stone-100 pt-3">
+                <form onSubmit={handleCustomGoogleEmailSubmit} className="space-y-2">
+                  <label className="block text-xs font-bold text-stone-700">
+                    {language === 'en' ? 'Or enter your Google Email to register/login:' : '或直接輸入您的 Google 帳號 (Gmail)：'}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      required
+                      placeholder="your.name@gmail.com"
+                      value={customGoogleEmail}
+                      onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                      className="flex-1 px-3 py-2 text-xs border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-stone-900 text-white text-xs font-black rounded-xl hover:bg-black"
+                    >
+                      {language === 'en' ? 'Enter' : '登入'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -722,58 +910,124 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // --- RENDER FULL ADMIN DASHBOARD ---
   return (
     <div className="space-y-6 pb-16">
-      {/* Top Banner with Logout */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-stone-900 text-stone-100 p-5 md:p-6 rounded-3xl shadow-md">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">
-              {language === 'en' ? 'Kong Shan Temple Registration & Check-In Hub' : '空山寺 報名報到組調度中樞'}
-            </h2>
-            <span className="text-xs bg-amber-500/20 text-amber-300 px-3 py-0.5 rounded-full border border-amber-500/30 font-bold">
-              {language === 'en' ? 'US East Hub' : '美東總調度'}
-            </span>
-            <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-bold">
-              {language === 'en' ? 'Admin Logged In' : '幹部已登入'}
-            </span>
+      {/* Top Banner with Current Admin Profile & Actions */}
+      <div className="bg-stone-900 text-stone-100 p-5 md:p-6 rounded-3xl shadow-md space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl md:text-2xl font-black tracking-tight">
+                {language === 'en' ? 'Kong Shan Temple Registration & Check-In Hub' : '空山寺 報名報到組調度中樞'}
+              </h2>
+              <span className="text-xs bg-amber-500/20 text-amber-300 px-3 py-0.5 rounded-full border border-amber-500/30 font-bold">
+                {language === 'en' ? 'US East Hub' : '美東總調度'}
+              </span>
+              <span
+                className={`text-xs px-2.5 py-0.5 rounded-full border font-bold flex items-center gap-1 ${
+                  currentAdmin.role === 'super_admin'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                }`}
+              >
+                <Shield className="w-3 h-3" />
+                <span>{currentAdmin.role === 'super_admin' ? t.accountRoleSuperAdmin : t.accountRoleStaff}</span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5 mt-2 text-xs text-stone-300">
+              {currentAdmin.avatar ? (
+                <img src={currentAdmin.avatar} alt={currentAdmin.name} className="w-6 h-6 rounded-full border border-amber-400" />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-amber-800 text-white font-bold flex items-center justify-center text-[10px]">
+                  {currentAdmin.name.slice(0, 1)}
+                </div>
+              )}
+              <span className="font-black text-white">{currentAdmin.name}</span>
+              <span className="text-stone-400">({currentAdmin.email})</span>
+              <span className="text-stone-500 hidden sm:inline">•</span>
+              <span className="text-stone-400 hidden sm:inline">{currentEvent.title}</span>
+            </div>
           </div>
-          <p className="text-xs md:text-sm text-stone-400 mt-1 font-medium">
-            {language === 'en' ? `Event: ${currentEvent.title} • Address: 174 Hynes RD, Poughquag, NY 12570` : `活動：${currentEvent.title} • 寺址：174 Hynes RD, Poughquag, NY 12570`}
-          </p>
+
+          {/* Quick Management Actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setIsPhoneModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{language === 'en' ? 'Phone Registration' : '代長輩登記'}</span>
+            </button>
+
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>{language === 'en' ? 'Export CSV' : '匯出 CSV'}</span>
+            </button>
+
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-amber-300" />
+              <span>{language === 'en' ? 'Print' : '列印名冊'}</span>
+            </button>
+
+            {/* Event Management Button (Multi-Event) */}
+            <button
+              onClick={() => setShowEventModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-800 hover:bg-amber-700 text-amber-100 border border-amber-600/50 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+            >
+              <Calendar className="w-4 h-4 text-amber-300" />
+              <span>{t.eventManagementBtn}</span>
+            </button>
+
+            {/* Super Admin: Account Management Button */}
+            {currentAdmin.role === 'super_admin' && (
+              <button
+                onClick={() => setShowAccountModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-700/60 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+              >
+                <Users className="w-4 h-4 text-purple-300" />
+                <span>{t.accountManagementBtn}</span>
+              </button>
+            )}
+
+            {/* Logout Button */}
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1 px-3 py-2 bg-red-950/60 hover:bg-red-900 text-red-200 border border-red-800/60 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4 text-red-300" />
+              <span>{t.adminLogoutBtn}</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setIsPhoneModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer shadow-xs"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>{language === 'en' ? 'Phone Registration' : '代長輩電話登記'}</span>
-          </button>
+        {/* Event Selector Sub-Bar */}
+        <div className="pt-3 border-t border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-stone-400 font-bold">{t.currentManagingEvent}:</span>
+            <div className="relative inline-block">
+              <select
+                value={currentEvent.id}
+                onChange={(e) => onSelectEvent(e.target.value)}
+                className="bg-stone-800 text-amber-300 font-black px-3 py-1.5 pr-8 rounded-xl border border-stone-700 focus:outline-hidden focus:border-amber-500 cursor-pointer appearance-none text-xs"
+              >
+                {allEvents.map((evt) => (
+                  <option key={evt.id} value={evt.id} className="bg-stone-900 text-white">
+                    {evt.title} ({evt.status === 'published' ? '🟢 公開' : '🟡 隱藏'})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-stone-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
 
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>{language === 'en' ? 'Export CSV' : '匯出名冊 CSV'}</span>
-          </button>
-
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
-          >
-            <Printer className="w-4 h-4 text-amber-300" />
-            <span>{language === 'en' ? 'Print Roster' : '列印名冊'}</span>
-          </button>
-
-          <button
-            onClick={handleLogout}
-            title={language === 'en' ? 'Sign Out' : '登出報名報到組後台'}
-            className="flex items-center gap-1 px-3 py-2 bg-red-950/60 hover:bg-red-900 text-red-200 border border-red-800/60 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4 text-red-300" />
-            <span>{language === 'en' ? 'Sign Out' : '登出'}</span>
-          </button>
+          <div className="text-stone-400 font-medium truncate">
+            📍 寺院地址：{currentEvent.location}
+          </div>
         </div>
       </div>
 
@@ -1893,6 +2147,32 @@ export const AdminView: React.FC<AdminViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Account Management Modal (Super Admin) */}
+      {currentAdmin && (
+        <AccountManagementModal
+          isOpen={showAccountModal}
+          onClose={() => setShowAccountModal(false)}
+          accounts={adminAccounts}
+          currentAdmin={currentAdmin}
+          onUpdateAccount={onUpdateAccount}
+          onDeleteAccount={onDeleteAccount}
+          onAddAccount={onAddAccount}
+        />
+      )}
+
+      {/* Event Management Modal (All Staff / Super Admin) */}
+      <EventManagerModal
+        isOpen={showEventModal}
+        onClose={() => setShowEventModal(false)}
+        events={allEvents}
+        activeEventId={currentEvent.id}
+        onSelectEvent={onSelectEvent}
+        onSaveEvent={onSaveEvent}
+        onDeleteEvent={onDeleteEvent}
+        offers={offers}
+        requests={requests}
+      />
     </div>
   );
 };

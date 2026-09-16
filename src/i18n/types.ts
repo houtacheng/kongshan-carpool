@@ -245,4 +245,56 @@ export interface TranslationDictionary {
   ejectedBadge: string;
   ejectedNotice: string;
   ejectedReasonPrefix: string;
+
+  // Google Auth & Account Management
+  googleSignInBtn: string;
+  googleSignUpBtn: string;
+  googleAccountRegisteredNotice: string;
+  accountSuspendedNotice: string;
+  accountPendingNotice: string;
+  accountManagementBtn: string;
+  accountManagementTitle: string;
+  accountManagementSubtitle: string;
+  accountRoleSuperAdmin: string;
+  accountRoleStaff: string;
+  accountStatusActive: string;
+  accountStatusSuspended: string;
+  accountStatusPending: string;
+  suspendAccountBtn: string;
+  activateAccountBtn: string;
+  deleteAccountBtn: string;
+  deleteAccountConfirm: string;
+  addNewStaffBtn: string;
+  staffEmailLabel: string;
+  staffNameLabel: string;
+  roleLabel: string;
+  noteLabel: string;
+
+  // Multi-Event Management
+  eventManagementBtn: string;
+  eventManagementTitle: string;
+  eventManagementSubtitle: string;
+  currentManagingEvent: string;
+  allEventsSelector: string;
+  addEventBtn: string;
+  editEventBtn: string;
+  deleteEventBtn: string;
+  deleteEventConfirm: string;
+  publishEventBtn: string;
+  hideEventBtn: string;
+  statusPublished: string;
+  statusHidden: string;
+  statusDraft: string;
+  eventTitleLabel: string;
+  eventThemeLabel: string;
+  eventSubtitleLabel: string;
+  eventDateLabel: string;
+  eventLocationLabel: string;
+  eventVolunteerArrivalLabel: string;
+  eventAttendeeArrivalLabel: string;
+  eventAssemblyNotesLabel: string;
+  saveEventBtn: string;
+  cancelEventBtn: string;
+  noPublishedEvents: string;
+  selectEventDropdown: string;
 }

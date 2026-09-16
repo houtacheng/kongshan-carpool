@@ -104,15 +104,17 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label={t.selectEvent}
               className="bg-transparent text-xs md:text-sm font-bold text-stone-800 focus:outline-hidden cursor-pointer w-full md:w-auto pr-2"
             >
-              {events.map((evt) => {
-                const loc = getLocalizedEvent(evt, language);
-                const displayDate = loc.date.includes('（') ? loc.date.split('（')[0] : loc.date.split('(')[0];
-                return (
-                  <option key={evt.id} value={evt.id}>
-                    {loc.title} ({displayDate.trim()})
-                  </option>
-                );
-              })}
+              {events
+                .filter((evt) => currentTab === 'admin' || evt.status === 'published')
+                .map((evt) => {
+                  const loc = getLocalizedEvent(evt, language);
+                  const displayDate = loc.date.includes('（') ? loc.date.split('（')[0] : loc.date.split('(')[0];
+                  return (
+                    <option key={evt.id} value={evt.id}>
+                      {loc.title} ({displayDate.trim()})
+                    </option>
+                  );
+                })}
             </select>
           </div>
         </div>

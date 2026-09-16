@@ -1,5 +1,23 @@
 export type ParticipantRole = 'volunteer' | 'attendee'; // 義工 (提早到協助) | 正行 (活動參加者)
 
+export type AdminRole = 'super_admin' | 'staff'; // 系統總幹事 / 超級管理員 | 報名報到組幹部
+export type AccountStatus = 'active' | 'suspended' | 'pending'; // 正常使用 | 暫停權限 | 審核中
+
+export interface AdminAccount {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  role: AdminRole;
+  status: AccountStatus;
+  authProvider: 'google';
+  registeredAt: string;
+  lastLoginAt?: string;
+  note?: string;
+}
+
+export type EventStatus = 'published' | 'draft' | 'hidden'; // 已發布(前台可見) | 草稿 | 已隱藏(僅後台可見)
+
 export interface ScheduleItem {
   time: string;
   activity: string;
@@ -15,11 +33,13 @@ export interface Event {
   date: string;
   templeName: string;
   location: string;
+  status: EventStatus;
   volunteerArrivalTime: string; // 義工集合時間 (如 08:00 前)
   attendeeArrivalTime: string;  // 正行參加者集合時間 (09:00~09:30 入寺)
   assemblyNotes: string;
   schedule: ScheduleItem[];
   reminders: string[];
+  createdAt?: string;
 }
 
 export interface BookingPassenger {
