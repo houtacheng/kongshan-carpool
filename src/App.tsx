@@ -6,9 +6,11 @@ import { PassengerView } from './components/PassengerView';
 import { DriverView } from './components/DriverView';
 import { AdminView } from './components/AdminView';
 import { MapPin } from 'lucide-react';
-import { LanguageProvider } from './i18n/LanguageContext';
+import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
+import { getLocalizedArea } from './i18n/translations';
 
 function AppContent() {
+  const { t, language } = useLanguage();
   const [events] = useState<Event[]>(INITIAL_EVENTS);
   const [selectedEventId, setSelectedEventId] = useState<string>(INITIAL_EVENTS[0].id);
   const [currentTab, setCurrentTab] = useState<'passenger' | 'driver' | 'admin'>('passenger');
@@ -134,9 +136,181 @@ function AppContent() {
     setOffers((prev) => [newOffer, ...prev]);
   };
 
-  // Action: Delete offer
+  // Action: Delete offer with automatic passenger ejection
   const handleDeleteOffer = (offerId: string) => {
+    const targetOffer = offers.find((o) => o.id === offerId);
+    if (!targetOffer) return;
+
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
+    const reasonText = language === 'en'
+      ? `Original vehicle [${targetOffer.driverName} - ${targetOffer.carModel || 'Vehicle'} (${getLocalizedArea(targetOffer.departureArea, 'en')})] was deleted by admin. Requires priority re-assignment.`
+      : language === 'zh-CN'
+      ? `原安排车辆【${targetOffer.driverName} - ${targetOffer.carModel || '自用车'} (${targetOffer.departureArea})】已被删除，需优先重新安排车位`
+      : `原安排車輛【${targetOffer.driverName} - ${targetOffer.carModel || '自用車'} (${targetOffer.departureArea})】已被刪除，需優先重新安排車位`;
+
+    // 1. Eject matched requests back to pending queue
+    setRequests((prevRequests) => {
+      let updated = prevRequests.map((req) => {
+        const isOutboundMatched = req.matchedOutboundOfferId === offerId;
+        const isReturnMatched = req.matchedReturnOfferId === offerId;
+
+        if (isOutboundMatched || isReturnMatched) {
+          const remainingOutbound = isOutboundMatched ? undefined : req.matchedOutboundOfferId;
+          const remainingReturn = isReturnMatched ? undefined : req.matchedReturnOfferId;
+
+          let newStatus: RideRequest['status'] = 'pending';
+          if (remainingOutbound || remainingReturn) {
+            newStatus = 'matched_partial';
+          }
+
+          return {
+            ...req,
+            status: newStatus,
+            matchedOutboundOfferId: remainingOutbound,
+            matchedReturnOfferId: remainingReturn,
+            isEjected: true,
+            ejectedReason: reasonText,
+            ejectedAt: nowStr,
+          };
+        }
+        return req;
+      });
+
+      // 2. Also check if any directly-booked passengers do not have a RideRequest entry
+      const allOfferPassengers = [...targetOffer.outboundPassengers, ...targetOffer.returnPassengers];
+      const newlyCreatedRequests: RideRequest[] = [];
+
+      allOfferPassengers.forEach((p) => {
+        const alreadyTracked = updated.some(
+          (r) =>
+            (r.passengerPhone === p.phone || r.passengerName === p.name) &&
+            (r.isEjected || r.matchedOutboundOfferId === offerId || r.matchedReturnOfferId === offerId)
+        );
+
+        if (!alreadyTracked && !newlyCreatedRequests.some((nr) => nr.passengerPhone === p.phone)) {
+          const isOutbound = targetOffer.outboundPassengers.some((op) => op.id === p.id);
+          const isReturn = targetOffer.returnPassengers.some((rp) => rp.id === p.id);
+
+          newlyCreatedRequests.push({
+            id: `req-ejected-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            eventId: targetOffer.eventId || selectedEventId,
+            passengerName: p.name,
+            passengerPhone: p.phone,
+            wechatOrLine: p.wechatOrLine,
+            pickupArea: targetOffer.departureArea,
+            pickupPoint: p.pickupNote || targetOffer.departurePoint,
+            passengerCount: p.passengerCount,
+            needOutbound: isOutbound,
+            outboundRole: p.role,
+            needReturn: isReturn,
+            returnRole: p.role,
+            notes: p.pickupNote,
+            status: 'pending',
+            isEjected: true,
+            ejectedReason: reasonText,
+            ejectedAt: nowStr,
+            createdAt: nowStr,
+          });
+        }
+      });
+
+      return [...newlyCreatedRequests, ...updated];
+    });
+
+    // 3. Remove offer
     setOffers((prev) => prev.filter((o) => o.id !== offerId));
+  };
+
+  // Action: Eject an individual passenger from a vehicle
+  const handleEjectPassengerFromOffer = (offerId: string, passengerId: string, leg: 'outbound' | 'return') => {
+    const targetOffer = offers.find((o) => o.id === offerId);
+    if (!targetOffer) return;
+
+    const passenger = leg === 'outbound'
+      ? targetOffer.outboundPassengers.find((p) => p.id === passengerId)
+      : targetOffer.returnPassengers.find((p) => p.id === passengerId);
+    if (!passenger) return;
+
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
+    const legLabel = leg === 'outbound'
+      ? (language === 'en' ? 'Outbound' : '去程')
+      : (language === 'en' ? 'Return' : '回程');
+    const reasonText = language === 'en'
+      ? `Ejected from vehicle [${targetOffer.driverName}] (${legLabel}) by admin. Requires re-assignment.`
+      : language === 'zh-CN'
+      ? `由后台管理员从【${targetOffer.driverName}】车次移出（${legLabel}行程），需重新安排`
+      : `由後台管理員從【${targetOffer.driverName}】車次移出（${legLabel}行程），需重新安排`;
+
+    // 1. Release seat and remove passenger from offer
+    setOffers((prevOffers) =>
+      prevOffers.map((o) => {
+        if (o.id === offerId) {
+          if (leg === 'outbound') {
+            return {
+              ...o,
+              outboundPassengers: o.outboundPassengers.filter((p) => p.id !== passengerId),
+              outboundAvailableSeats: Math.min(o.outboundTotalSeats, o.outboundAvailableSeats + passenger.passengerCount),
+            };
+          } else {
+            return {
+              ...o,
+              returnPassengers: o.returnPassengers.filter((p) => p.id !== passengerId),
+              returnAvailableSeats: Math.min(o.returnTotalSeats, o.returnAvailableSeats + passenger.passengerCount),
+            };
+          }
+        }
+        return o;
+      })
+    );
+
+    // 2. Update or create request as ejected
+    setRequests((prevRequests) => {
+      const existingReqIndex = prevRequests.findIndex(
+        (r) =>
+          (r.passengerPhone === passenger.phone || r.passengerName === passenger.name) &&
+          (leg === 'outbound' ? r.matchedOutboundOfferId === offerId : r.matchedReturnOfferId === offerId)
+      );
+
+      if (existingReqIndex >= 0) {
+        const existing = prevRequests[existingReqIndex];
+        const newOut = leg === 'outbound' ? undefined : existing.matchedOutboundOfferId;
+        const newRet = leg === 'return' ? undefined : existing.matchedReturnOfferId;
+        const updatedReq: RideRequest = {
+          ...existing,
+          status: newOut || newRet ? 'matched_partial' : 'pending',
+          matchedOutboundOfferId: newOut,
+          matchedReturnOfferId: newRet,
+          isEjected: true,
+          ejectedReason: reasonText,
+          ejectedAt: nowStr,
+        };
+        const copy = [...prevRequests];
+        copy[existingReqIndex] = updatedReq;
+        return copy;
+      } else {
+        const newReq: RideRequest = {
+          id: `req-ejected-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          eventId: targetOffer.eventId || selectedEventId,
+          passengerName: passenger.name,
+          passengerPhone: passenger.phone,
+          wechatOrLine: passenger.wechatOrLine,
+          pickupArea: targetOffer.departureArea,
+          pickupPoint: passenger.pickupNote || targetOffer.departurePoint,
+          passengerCount: passenger.passengerCount,
+          needOutbound: leg === 'outbound',
+          outboundRole: passenger.role,
+          needReturn: leg === 'return',
+          returnRole: passenger.role,
+          notes: passenger.pickupNote,
+          status: 'pending',
+          isEjected: true,
+          ejectedReason: reasonText,
+          ejectedAt: nowStr,
+          createdAt: nowStr,
+        };
+        return [newReq, ...prevRequests];
+      }
+    });
   };
 
   // Action: Passenger creates request
@@ -218,7 +392,7 @@ function AppContent() {
       })
     );
 
-    // 2. Update Request Status
+    // 2. Update Request Status & Clear Ejection
     setRequests((prev) =>
       prev.map((r) => {
         if (r.id === requestId) {
@@ -228,6 +402,8 @@ function AppContent() {
             status: isFullyMatched ? 'matched_full' : 'matched_partial',
             matchedOutboundOfferId: needOut ? offerId : r.matchedOutboundOfferId,
             matchedReturnOfferId: needRet ? offerId : r.matchedReturnOfferId,
+            isEjected: isFullyMatched ? false : r.isEjected,
+            ejectedReason: isFullyMatched ? undefined : r.ejectedReason,
           };
         }
         return r;
@@ -247,14 +423,49 @@ function AppContent() {
     setRequests((prev) => prev.map((r) => (r.id === updatedRequest.id ? updatedRequest : r)));
   };
 
+  // Action: Delete a ride request (freeing vehicle seats if assigned)
+  const handleDeleteRequest = (requestId: string) => {
+    const targetReq = requests.find((r) => r.id === requestId);
+    if (!targetReq) return;
+
+    if (targetReq.matchedOutboundOfferId || targetReq.matchedReturnOfferId) {
+      setOffers((prevOffers) =>
+        prevOffers.map((o) => {
+          let updated = { ...o };
+          if (o.id === targetReq.matchedOutboundOfferId) {
+            updated.outboundPassengers = o.outboundPassengers.filter(
+              (p) => p.phone !== targetReq.passengerPhone && p.name !== targetReq.passengerName
+            );
+            updated.outboundAvailableSeats = Math.min(
+              o.outboundTotalSeats,
+              o.outboundAvailableSeats + targetReq.passengerCount
+            );
+          }
+          if (o.id === targetReq.matchedReturnOfferId) {
+            updated.returnPassengers = o.returnPassengers.filter(
+              (p) => p.phone !== targetReq.passengerPhone && p.name !== targetReq.passengerName
+            );
+            updated.returnAvailableSeats = Math.min(
+              o.returnTotalSeats,
+              o.returnAvailableSeats + targetReq.passengerCount
+            );
+          }
+          return updated;
+        })
+      );
+    }
+
+    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+  };
+
   // Action: Cancel a ride request
   const handleCancelRequest = (requestId: string) => {
-    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    handleDeleteRequest(requestId);
   };
 
   // Reset to initial mock data
   const handleResetData = () => {
-    if (confirm('確定要還原空山寺中秋法會的展示資料為初始狀態嗎？')) {
+    if (confirm(t.resetConfirmPrompt)) {
       localStorage.removeItem('kongshan_carpool_offers_v2');
       localStorage.removeItem('kongshan_carpool_requests_v2');
       setOffers(INITIAL_OFFERS);
@@ -310,6 +521,9 @@ function AppContent() {
               onUpdateOffer={handleUpdateOffer}
               onUpdateRequest={handleUpdateRequest}
               onCancelRequest={handleCancelRequest}
+              onDeleteOffer={handleDeleteOffer}
+              onDeleteRequest={handleDeleteRequest}
+              onEjectPassenger={handleEjectPassengerFromOffer}
             />
           )}
         </main>
@@ -318,14 +532,14 @@ function AppContent() {
       {/* Footer */}
       <footer className="border-t border-stone-200 bg-white py-8 text-center text-xs md:text-sm text-stone-600 space-y-2 mt-16">
         <div className="flex items-center justify-center gap-2 font-black text-stone-900 text-sm md:text-base">
-          <img src="/kongshan_logo.png" alt="空山" className="w-6 h-6 object-contain bg-black rounded-md" />
-          <span>空山寺 (Kong Shan Temple) • 美東中秋共乘服務網</span>
+          <img src="./kongshan_logo.png" alt="Kong Shan" className="w-6 h-6 object-contain bg-black rounded-md" />
+          <span>{t.footerTagline}</span>
         </div>
         <p className="text-stone-500 flex flex-wrap items-center justify-center gap-1 font-medium">
           <MapPin className="w-4 h-4 text-amber-700" />
-          <span>174 Hynes RD, Poughquag, NY 12570</span>
+          <span>{t.templeAddress}</span>
           <span>•</span>
-          <span>共乘互助同行 • 彼此照應 • 圓滿順利</span>
+          <span>{t.footerSlogan}</span>
         </p>
       </footer>
     </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Event, CarpoolOffer, RideRequest, ParticipantRole } from '../types';
 import { EAST_COAST_AREAS } from '../data/mockData';
 import { useLanguage } from '../i18n/LanguageContext';
+import { getLocalizedArea } from '../i18n/translations';
 import {
   Car,
   CheckCircle2,
@@ -32,6 +33,9 @@ interface AdminViewProps {
   onUpdateOffer?: (offer: CarpoolOffer) => void;
   onUpdateRequest?: (request: RideRequest) => void;
   onCancelRequest?: (requestId: string) => void;
+  onDeleteOffer?: (offerId: string) => void;
+  onDeleteRequest?: (requestId: string) => void;
+  onEjectPassenger?: (offerId: string, passengerId: string, leg: 'outbound' | 'return') => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
@@ -44,8 +48,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onUpdateOffer,
   onUpdateRequest,
   onCancelRequest,
+  onDeleteOffer,
+  onDeleteRequest,
+  onEjectPassenger,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return localStorage.getItem('kongshan_checkin_auth') === 'true';
@@ -56,7 +63,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const currentOffers = offers.filter((o) => o.eventId === currentEvent.id);
   const currentRequests = requests.filter((r) => r.eventId === currentEvent.id);
-  const pendingRequests = currentRequests.filter((r) => r.status !== 'matched_full');
+  const pendingRequests = currentRequests
+    .filter((r) => r.status !== 'matched_full')
+    .sort((a, b) => {
+      if (a.isEjected && !b.isEjected) return -1;
+      if (!a.isEjected && b.isEjected) return 1;
+      return 0;
+    });
+  const ejectedRequests = pendingRequests.filter((r) => r.isEjected);
+  const ejectedCount = ejectedRequests.length;
 
   // Manual assignment state
   const [selectedOfferMap, setSelectedOfferMap] = useState<{ [reqId: string]: string }>({});
@@ -165,8 +180,50 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const handleSaveAdminEditOffer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminEditingOffer || !onUpdateOffer) return;
-    const outPassCount = adminEditingOffer.outboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
-    const retPassCount = adminEditingOffer.returnPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+
+    let finalOutboundPassengers = [...adminEditingOffer.outboundPassengers];
+    let finalReturnPassengers = [...adminEditingOffer.returnPassengers];
+    let ejectedCountInModal = 0;
+
+    // Outbound leg check
+    if (!adminEditHasOutbound) {
+      finalOutboundPassengers.forEach((p) => {
+        onEjectPassenger?.(adminEditingOffer.id, p.id, 'outbound');
+        ejectedCountInModal++;
+      });
+      finalOutboundPassengers = [];
+    } else {
+      let outCount = finalOutboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+      while (outCount > adminEditOutboundTotalSeats && finalOutboundPassengers.length > 0) {
+        const popped = finalOutboundPassengers[finalOutboundPassengers.length - 1];
+        onEjectPassenger?.(adminEditingOffer.id, popped.id, 'outbound');
+        finalOutboundPassengers.pop();
+        outCount -= popped.passengerCount;
+        ejectedCountInModal++;
+      }
+    }
+
+    // Return leg check
+    if (!adminEditHasReturn) {
+      finalReturnPassengers.forEach((p) => {
+        onEjectPassenger?.(adminEditingOffer.id, p.id, 'return');
+        ejectedCountInModal++;
+      });
+      finalReturnPassengers = [];
+    } else {
+      let retCount = finalReturnPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+      while (retCount > adminEditReturnTotalSeats && finalReturnPassengers.length > 0) {
+        const popped = finalReturnPassengers[finalReturnPassengers.length - 1];
+        onEjectPassenger?.(adminEditingOffer.id, popped.id, 'return');
+        finalReturnPassengers.pop();
+        retCount -= popped.passengerCount;
+        ejectedCountInModal++;
+      }
+    }
+
+    const outPassCount = finalOutboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+    const retPassCount = finalReturnPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+
     const updated: CarpoolOffer = {
       ...adminEditingOffer,
       driverName: adminEditDriverName.trim(),
@@ -182,13 +239,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
       outboundTime: adminEditOutboundTime.trim(),
       outboundTotalSeats: adminEditOutboundTotalSeats,
       outboundAvailableSeats: Math.max(0, adminEditOutboundTotalSeats - outPassCount),
+      outboundPassengers: finalOutboundPassengers,
       hasReturn: adminEditHasReturn,
       returnTime: adminEditReturnTime.trim(),
       returnTotalSeats: adminEditReturnTotalSeats,
-      returnAvailableSeats: Math.max(0, adminEditReturnTotalSeats - retPassCount)
+      returnAvailableSeats: Math.max(0, adminEditReturnTotalSeats - retPassCount),
+      returnPassengers: finalReturnPassengers,
     };
     onUpdateOffer(updated);
     setAdminEditingOffer(null);
+
+    if (ejectedCountInModal > 0) {
+      alert(language === 'en'
+        ? `Notice: ${ejectedCountInModal} passenger(s) were automatically popped out due to reduced seat capacity or cancelled leg!`
+        : `提示：因車輛容量縮減或行程變更，已有 ${ejectedCountInModal} 位乘客被自動彈出並重新列入等候名單！`
+      );
+    }
   };
 
   // Stats calculation
@@ -226,13 +292,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
       // 1. Same area matching
       if (offer.departureArea === req.pickupArea) {
         score += 50;
-        reasons.push('同出發區域');
+        reasons.push(language === 'en' ? 'Same departure area' : '同出發區域');
       } else if (
         offer.departureArea.includes(req.pickupArea.split(' ')[0]) ||
         req.pickupArea.includes(offer.departureArea.split(' ')[0])
       ) {
         score += 30;
-        reasons.push('相鄰生活圈');
+        reasons.push(language === 'en' ? 'Adjacent community' : '相鄰生活圈');
       }
 
       // 2. Leg & Seats check
@@ -254,15 +320,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
       if (canOutbound && canReturn) {
         score += 40;
-        reasons.push('去回雙程皆可搭乘');
+        reasons.push(language === 'en' ? 'Both legs can be covered' : '去回雙程皆可搭乘');
         matchLeg = 'both';
       } else if (canOutbound) {
         score += 20;
-        reasons.push('可接送去程');
+        reasons.push(language === 'en' ? 'Can take outbound leg' : '可接送去程');
         matchLeg = 'outbound';
       } else {
         score += 20;
-        reasons.push('可接送回程');
+        reasons.push(language === 'en' ? 'Can take return leg' : '可接送回程');
         matchLeg = 'return';
       }
 
@@ -270,15 +336,28 @@ export const AdminView: React.FC<AdminViewProps> = ({
       if (canOutbound) {
         if (offer.outboundMode === req.outboundRole || offer.outboundMode === 'both') {
           score += 15;
-          reasons.push(req.outboundRole === 'volunteer' ? '符合義工早車' : '符合正行時間');
+          reasons.push(
+            language === 'en'
+              ? (req.outboundRole === 'volunteer' ? 'Matches volunteer early ride' : 'Matches attendee schedule')
+              : (req.outboundRole === 'volunteer' ? '符合義工早車' : '符合正行時間')
+          );
         }
       }
 
       if (canReturn) {
         if (offer.returnMode === req.returnRole || offer.returnMode === 'both') {
           score += 15;
-          reasons.push(req.returnRole === 'volunteer' ? '符合善後返程' : '符合活動結束即回');
+          reasons.push(
+            language === 'en'
+              ? (req.returnRole === 'volunteer' ? 'Matches volunteer return ride' : 'Matches attendee departure')
+              : (req.returnRole === 'volunteer' ? '符合善後返程' : '符合活動結束即回')
+          );
         }
+      }
+
+      if (req.isEjected) {
+        score += 30;
+        reasons.unshift(language === 'en' ? '⚠️ Priority: Ejected passenger' : '⚠️ 優先安排：車輛異動彈出');
       }
 
       if (score > maxScore) {
@@ -312,20 +391,20 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const handleApplySuggestion = (sug: SuggestedMatch) => {
     const success = onMatchRequestToOffer(sug.requestId, sug.offerId, sug.leg);
     if (success) {
-      alert(`已成功採納建議，將乘客指派至 ${sug.offer.driverName} 的車輛！`);
+      alert(language === 'en' ? `Adopted recommendation: passenger assigned to ${sug.offer.driverName}'s vehicle!` : `已成功採納建議，將乘客指派至 ${sug.offer.driverName} 的車輛！`);
     } else {
-      alert('該車次剩餘座位不足，無法排入。');
+      alert(language === 'en' ? 'This car has insufficient seats remaining.' : '該車次剩餘座位不足，無法排入。');
     }
   };
 
   // Handler: Apply ALL suggestions in batch
   const handleApplyAllSuggestions = () => {
     if (totalSuggestionsCount === 0) {
-      alert('目前沒有可自動配對的建議。');
+      alert(language === 'en' ? 'No recommendations available to pair automatically.' : '目前沒有可自動配對的建議。');
       return;
     }
 
-    if (!confirm(`系統即將自動為 ${totalSuggestionsCount} 位乘客套用最佳車位配對，是否確認？`)) {
+    if (!confirm(language === 'en' ? `System will automatically apply optimal carpool matches for ${totalSuggestionsCount} passengers. Proceed?` : `系統即將自動為 ${totalSuggestionsCount} 位乘客套用最佳車位配對，是否確認？`)) {
       return;
     }
 
@@ -338,7 +417,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       }
     }
 
-    alert(`智慧媒合完成！成功配對 ${successCount} 筆乘客名單。`);
+    alert(language === 'en' ? `Smart matching complete! Successfully paired ${successCount} passenger(s).` : `智慧媒合完成！成功配對 ${successCount} 筆乘客名單。`);
   };
 
   // Login handler
@@ -352,7 +431,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       localStorage.setItem('kongshan_checkin_auth', 'true');
       setLoginError('');
     } else {
-      setLoginError('帳號或密碼錯誤！請使用預設幹部帳號：admin / 密碼：kongshan2026');
+      setLoginError(language === 'en' ? 'Invalid credentials! Use demo credentials: admin / password: kongshan2026' : '帳號或密碼錯誤！請使用預設幹部帳號：admin / 密碼：kongshan2026');
     }
   };
 
@@ -374,28 +453,28 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const targetLeg = selectedLegMap[requestId] || 'both';
 
     if (!targetOfferId) {
-      alert('請先選擇要指派的車輛！');
+      alert(language === 'en' ? 'Please select a vehicle to assign!' : '請先選擇要指派的車輛！');
       return;
     }
     const success = onMatchRequestToOffer(requestId, targetOfferId, targetLeg);
     if (success) {
-      alert('指派成功！已將乘客排入指定車次名冊。');
+      alert(language === 'en' ? 'Assigned successfully! Passenger added to roster.' : '指派成功！已將乘客排入指定車次名冊。');
     } else {
-      alert('該車次在指定行程的剩餘座位不足，無法排入！');
+      alert(language === 'en' ? 'This vehicle does not have enough remaining seats for the selected leg.' : '該車次在指定行程的剩餘座位不足，無法排入！');
     }
   };
 
   const handleElderlySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!elderlyName.trim() || !elderlyPhone.trim() || !elderlyPoint.trim()) {
-      alert('請填妥姓名、電話與集合地點！');
+      alert(language === 'en' ? 'Please fill in name, phone, and pickup point!' : '請填妥姓名、電話與集合地點！');
       return;
     }
 
     if (phoneType === 'need-ride') {
       onCreateRequest({
         eventId: currentEvent.id,
-        passengerName: `${elderlyName.trim()} (報名報到組代報)`,
+        passengerName: `${elderlyName.trim()} (${language === 'en' ? 'Assisted by Admin' : '報名報到組代報'})`,
         passengerPhone: elderlyPhone.trim(),
         wechatOrLine: elderlyWechat.trim() || undefined,
         pickupArea: elderlyArea,
@@ -405,31 +484,31 @@ export const AdminView: React.FC<AdminViewProps> = ({
         outboundRole: elderlyOutboundRole,
         needReturn: true,
         returnRole: elderlyReturnRole,
-        notes: elderlyNotes.trim() ? `[代報] ${elderlyNotes.trim()}` : '[報名報到組電話代錄]',
+        notes: elderlyNotes.trim() ? `[${language === 'en' ? 'Assisted' : '代報'}] ${elderlyNotes.trim()}` : (language === 'en' ? '[Phone assisted by Admin]' : '[報名報到組電話代錄]'),
       });
-      alert('已成功登記搭乘需求！');
+      alert(language === 'en' ? 'Ride request registered successfully!' : '已成功登記搭乘需求！');
     } else {
       onCreateOffer({
         eventId: currentEvent.id,
-        driverName: `${elderlyName.trim()} (報名報到組代報)`,
+        driverName: `${elderlyName.trim()} (${language === 'en' ? 'Assisted by Admin' : '報名報到組代報'})`,
         driverPhone: elderlyPhone.trim(),
         wechatOrLine: elderlyWechat.trim() || undefined,
         departureArea: elderlyArea,
         departurePoint: elderlyPoint.trim(),
-        carModel: '自用車',
+        carModel: language === 'en' ? 'Standard Vehicle' : '自用車',
         notes: elderlyNotes.trim() || undefined,
         hasOutbound: true,
-        outboundTime: elderlyOutboundRole === 'volunteer' ? '06:30 義工車' : '08:00 正行車',
+        outboundTime: elderlyOutboundRole === 'volunteer' ? (language === 'en' ? '06:30 Volunteer' : '06:30 義工車') : (language === 'en' ? '08:00 Attendee' : '08:00 正行車'),
         outboundMode: elderlyOutboundRole,
         outboundTotalSeats: elderlyCount,
         outboundAvailableSeats: elderlyCount,
         hasReturn: true,
-        returnTime: elderlyReturnRole === 'volunteer' ? '16:30 善後後回' : '15:30 活動結束即回',
+        returnTime: elderlyReturnRole === 'volunteer' ? (language === 'en' ? '16:30 Volunteer Cleanup' : '16:30 善後後回') : (language === 'en' ? '15:30 Attendee Return' : '15:30 活動結束即回'),
         returnMode: elderlyReturnRole,
         returnTotalSeats: elderlyCount,
         returnAvailableSeats: elderlyCount,
       });
-      alert('已成功登記車位！');
+      alert(language === 'en' ? 'Vehicle seats registered successfully!' : '已成功登記車位！');
     }
 
     setIsPhoneModalOpen(false);
@@ -440,44 +519,46 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleExportCSV = () => {
+    const isEn = language === 'en';
     const rows = [
-      ['活動名稱', currentEvent.title],
-      ['活動主題', currentEvent.theme],
-      ['活動日期', currentEvent.date],
-      ['活動地點', `${currentEvent.templeName} (${currentEvent.location})`],
-      ['負責組別', '空山寺 報名報到組'],
+      [isEn ? 'Event Name' : '活動名稱', currentEvent.title],
+      [isEn ? 'Event Theme' : '活動主題', currentEvent.theme],
+      [isEn ? 'Event Date' : '活動日期', currentEvent.date],
+      [isEn ? 'Location' : '活動地點', `${currentEvent.templeName} (${currentEvent.location})`],
+      [isEn ? 'Organizing Team' : '負責組別', isEn ? 'Kong Shan Temple Registration Team' : '空山寺 報名報到組'],
       [''],
       [
-        '行程類別',
-        '出發區域',
-        '集合點',
-        '車主姓名',
-        '車主電話',
-        '車型',
-        '發車時間',
-        '班次屬性',
-        '乘客姓名',
-        '乘客電話',
-        '搭乘人數',
-        '乘客身分(義工/正行)',
-        '備註',
+        isEn ? 'Trip Leg' : '行程類別',
+        isEn ? 'Departure Area' : '出發區域',
+        isEn ? 'Meeting Point' : '集合點',
+        isEn ? 'Driver Name' : '車主姓名',
+        isEn ? 'Driver Phone' : '車主電話',
+        isEn ? 'Vehicle' : '車型',
+        isEn ? 'Departure Time' : '發車時間',
+        isEn ? 'Service Type' : '班次屬性',
+        isEn ? 'Passenger Name' : '乘客姓名',
+        isEn ? 'Passenger Phone' : '乘客電話',
+        isEn ? 'Seats' : '搭乘人數',
+        isEn ? 'Role' : '乘客身分(義工/正行)',
+        isEn ? 'Notes' : '備註',
       ],
     ];
 
     currentOffers.forEach((offer) => {
       // Outbound rows
       if (offer.hasOutbound) {
+        const outboundRoleStr = offer.outboundMode === 'volunteer' ? (isEn ? 'Volunteer (Early)' : '義工早車') : (isEn ? 'Attendee' : '正行車');
         if (offer.outboundPassengers.length === 0) {
           rows.push([
-            '去程 (前往空山寺)',
-            offer.departureArea,
+            isEn ? 'Outbound (To Temple)' : '去程 (前往空山寺)',
+            getLocalizedArea(offer.departureArea, language),
             offer.departurePoint,
             offer.driverName,
             offer.driverPhone,
             offer.carModel,
             offer.outboundTime,
-            offer.outboundMode === 'volunteer' ? '義工早車' : '正行車',
-            '(尚無乘客)',
+            outboundRoleStr,
+            isEn ? '(No passengers)' : '(尚無乘客)',
             '-',
             '0',
             '-',
@@ -486,18 +567,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
         } else {
           offer.outboundPassengers.forEach((p) => {
             rows.push([
-              '去程 (前往空山寺)',
-              offer.departureArea,
+              isEn ? 'Outbound (To Temple)' : '去程 (前往空山寺)',
+              getLocalizedArea(offer.departureArea, language),
               offer.departurePoint,
               offer.driverName,
               offer.driverPhone,
               offer.carModel,
               offer.outboundTime,
-              offer.outboundMode === 'volunteer' ? '義工早車' : '正行車',
+              outboundRoleStr,
               p.name,
               p.phone,
               p.passengerCount.toString(),
-              p.role === 'volunteer' ? '義工組' : '正行組',
+              p.role === 'volunteer' ? (isEn ? 'Volunteer' : '義工組') : (isEn ? 'Attendee' : '正行組'),
               p.pickupNote || '',
             ]);
           });
@@ -506,17 +587,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
       // Return rows
       if (offer.hasReturn) {
+        const returnRoleStr = offer.returnMode === 'volunteer' ? (isEn ? 'Volunteer (Cleanup)' : '義工善後車') : (isEn ? 'Attendee' : '正行車');
         if (offer.returnPassengers.length === 0) {
           rows.push([
-            '回程 (返回紐約/新澤西)',
-            offer.departureArea,
+            isEn ? 'Return (Heading Back)' : '回程 (返回紐約/新澤西)',
+            getLocalizedArea(offer.departureArea, language),
             offer.departurePoint,
             offer.driverName,
             offer.driverPhone,
             offer.carModel,
             offer.returnTime,
-            offer.returnMode === 'volunteer' ? '義工善後車' : '正行車',
-            '(尚無乘客)',
+            returnRoleStr,
+            isEn ? '(No passengers)' : '(尚無乘客)',
             '-',
             '0',
             '-',
@@ -525,18 +607,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
         } else {
           offer.returnPassengers.forEach((p) => {
             rows.push([
-              '回程 (返回紐約/新澤西)',
-              offer.departureArea,
+              isEn ? 'Return (Heading Back)' : '回程 (返回紐約/新澤西)',
+              getLocalizedArea(offer.departureArea, language),
               offer.departurePoint,
               offer.driverName,
               offer.driverPhone,
               offer.carModel,
               offer.returnTime,
-              offer.returnMode === 'volunteer' ? '義工善後車' : '正行車',
+              returnRoleStr,
               p.name,
               p.phone,
               p.passengerCount.toString(),
-              p.role === 'volunteer' ? '義工組' : '正行組',
+              p.role === 'volunteer' ? (isEn ? 'Volunteer' : '義工組') : (isEn ? 'Attendee' : '正行組'),
               p.pickupNote || '',
             ]);
           });
@@ -550,7 +632,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `空山寺中秋活動共乘名冊.csv`);
+    link.setAttribute('download', isEn ? `Kong_Shan_Temple_Carpool_Roster.csv` : `空山寺中秋活動共乘名冊.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -567,10 +649,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
           <div>
             <h2 className="text-2xl font-black text-stone-900 tracking-tight">
-              報名報到組幹部後台
+              {language === 'en' ? 'Registration & Check-In Admin Portal' : '報名報到組幹部後台'}
             </h2>
             <p className="text-xs md:text-sm text-stone-500 mt-1 font-medium">
-              請輸入管理帳號密碼以進入調度看板
+              {language === 'en' ? 'Please enter management credentials to access the dispatch dashboard' : '請輸入管理帳號密碼以進入調度看板'}
             </p>
           </div>
 
@@ -583,12 +665,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
           <form onSubmit={handleLogin} className="space-y-4 text-left">
             <div>
               <label className="block text-stone-800 text-xs md:text-sm font-bold mb-1.5">
-                幹部帳號
+                {t.adminUsernameLabel}
               </label>
               <input
                 type="text"
                 required
-                placeholder="請輸入帳號 (例如: admin)"
+                placeholder={language === 'en' ? 'Enter username (e.g. admin)' : '請輸入帳號 (例如: admin)'}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600 font-medium"
@@ -597,12 +679,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
             <div>
               <label className="block text-stone-800 text-xs md:text-sm font-bold mb-1.5">
-                安全密碼
+                {t.adminPasswordLabel}
               </label>
               <input
                 type="password"
                 required
-                placeholder="請輸入密碼 (例如: kongshan2026)"
+                placeholder={language === 'en' ? 'Enter password (e.g. kongshan2026)' : '請輸入密碼 (例如: kongshan2026)'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600 font-medium"
@@ -610,16 +692,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200 text-xs text-amber-950 font-medium leading-relaxed">
-              💡 <strong>預設測試憑證：</strong>
+              💡 <strong>{language === 'en' ? 'Default Test Credentials:' : '預設測試憑證：'}</strong>
               <br />
-              帳號：<code className="bg-white px-1.5 py-0.5 rounded font-bold">admin</code> ｜ 密碼：<code className="bg-white px-1.5 py-0.5 rounded font-bold">kongshan2026</code>
+              {language === 'en' ? 'Username: ' : '帳號：'}<code className="bg-white px-1.5 py-0.5 rounded font-bold">admin</code> ｜ {language === 'en' ? 'Password: ' : '密碼：'}<code className="bg-white px-1.5 py-0.5 rounded font-bold">kongshan2026</code>
             </div>
 
             <button
               type="submit"
               className="w-full py-3.5 bg-stone-900 hover:bg-black text-white rounded-xl font-black text-base transition-colors cursor-pointer shadow-xs"
             >
-              確認登入
+              {language === 'en' ? 'Sign In' : '確認登入'}
             </button>
           </form>
 
@@ -629,7 +711,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               className="w-full py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-bold text-xs md:text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
               <KeyRound className="w-4 h-4 text-amber-700" />
-              <span>手機快速登入（直接以報名報到組進入）</span>
+              <span>{language === 'en' ? '1-Click Quick Login (Direct Admin Access)' : '手機快速登入（直接以報名報到組進入）'}</span>
             </button>
           </div>
         </div>
@@ -644,16 +726,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-stone-900 text-stone-100 p-5 md:p-6 rounded-3xl shadow-md">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">空山寺 報名報到組調度中樞</h2>
+            <h2 className="text-xl md:text-2xl font-black tracking-tight">
+              {language === 'en' ? 'Kong Shan Temple Registration & Check-In Hub' : '空山寺 報名報到組調度中樞'}
+            </h2>
             <span className="text-xs bg-amber-500/20 text-amber-300 px-3 py-0.5 rounded-full border border-amber-500/30 font-bold">
-              美東總調度
+              {language === 'en' ? 'US East Hub' : '美東總調度'}
             </span>
             <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-bold">
-              幹部已登入
+              {language === 'en' ? 'Admin Logged In' : '幹部已登入'}
             </span>
           </div>
           <p className="text-xs md:text-sm text-stone-400 mt-1 font-medium">
-            活動：{currentEvent.title} • 寺址：174 Hynes RD, Poughquag, NY 12570
+            {language === 'en' ? `Event: ${currentEvent.title} • Address: 174 Hynes RD, Poughquag, NY 12570` : `活動：${currentEvent.title} • 寺址：174 Hynes RD, Poughquag, NY 12570`}
           </p>
         </div>
 
@@ -663,7 +747,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer shadow-xs"
           >
             <UserPlus className="w-4 h-4" />
-            <span>代長輩電話登記</span>
+            <span>{language === 'en' ? 'Phone Registration' : '代長輩電話登記'}</span>
           </button>
 
           <button
@@ -671,7 +755,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>匯出名冊 CSV</span>
+            <span>{language === 'en' ? 'Export CSV' : '匯出名冊 CSV'}</span>
           </button>
 
           <button
@@ -679,16 +763,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
           >
             <Printer className="w-4 h-4 text-amber-300" />
-            <span>列印名冊</span>
+            <span>{language === 'en' ? 'Print Roster' : '列印名冊'}</span>
           </button>
 
           <button
             onClick={handleLogout}
-            title="登出報名報到組後台"
+            title={language === 'en' ? 'Sign Out' : '登出報名報到組後台'}
             className="flex items-center gap-1 px-3 py-2 bg-red-950/60 hover:bg-red-900 text-red-200 border border-red-800/60 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 text-red-300" />
-            <span>登出</span>
+            <span>{language === 'en' ? 'Sign Out' : '登出'}</span>
           </button>
         </div>
       </div>
@@ -697,56 +781,78 @@ export const AdminView: React.FC<AdminViewProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="bg-white p-4 md:p-5 rounded-2xl border border-stone-200 shadow-xs">
           <div className="flex items-center justify-between text-stone-500 text-xs md:text-sm font-bold">
-            <span>登記愛心車輛</span>
+            <span>{language === 'en' ? 'Registered Cars' : '登記愛心車輛'}</span>
             <Car className="w-5 h-5 text-amber-700" />
           </div>
           <div className="text-2xl md:text-3xl font-black text-stone-900 mt-1.5">
-            {totalCars} <span className="text-xs md:text-sm font-normal text-stone-500">部</span>
+            {totalCars} <span className="text-xs md:text-sm font-normal text-stone-500">{language === 'en' ? 'cars' : '部'}</span>
           </div>
           <div className="text-xs text-stone-400 mt-0.5 font-medium">
-            服務法拉盛/布魯克林/NJ
+            {language === 'en' ? 'Flushing / Brooklyn / NJ' : '服務法拉盛/布魯克林/NJ'}
           </div>
         </div>
 
         <div className="bg-white p-4 md:p-5 rounded-2xl border border-stone-200 shadow-xs">
           <div className="flex items-center justify-between text-stone-500 text-xs md:text-sm font-bold">
-            <span>去程 (上山入席)</span>
+            <span>{language === 'en' ? 'Outbound (To Temple)' : '去程 (上山入席)'}</span>
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
           </div>
           <div className="text-2xl md:text-3xl font-black text-emerald-700 mt-1.5">
-            {outboundMatched} / {outboundCapacity} <span className="text-xs md:text-sm font-normal text-stone-500">人</span>
+            {outboundMatched} / {outboundCapacity} <span className="text-xs md:text-sm font-normal text-stone-500">{language === 'en' ? 'seats' : '人'}</span>
           </div>
           <div className="text-xs text-emerald-700 mt-0.5 font-bold">
-            入席率 {outboundCapacity > 0 ? Math.round((outboundMatched / outboundCapacity) * 100) : 0}%
+            {language === 'en' ? 'Occupancy' : '入席率'} {outboundCapacity > 0 ? Math.round((outboundMatched / outboundCapacity) * 100) : 0}%
           </div>
         </div>
 
         <div className="bg-white p-4 md:p-5 rounded-2xl border border-stone-200 shadow-xs">
           <div className="flex items-center justify-between text-stone-500 text-xs md:text-sm font-bold">
-            <span>回程 (返市區入席)</span>
+            <span>{language === 'en' ? 'Return (Heading Back)' : '回程 (返市區入席)'}</span>
             <CheckCircle2 className="w-5 h-5 text-amber-600" />
           </div>
           <div className="text-2xl md:text-3xl font-black text-amber-800 mt-1.5">
-            {returnMatched} / {returnCapacity} <span className="text-xs md:text-sm font-normal text-stone-500">人</span>
+            {returnMatched} / {returnCapacity} <span className="text-xs md:text-sm font-normal text-stone-500">{language === 'en' ? 'seats' : '人'}</span>
           </div>
           <div className="text-xs text-amber-800 mt-0.5 font-bold">
-            入席率 {returnCapacity > 0 ? Math.round((returnMatched / returnCapacity) * 100) : 0}%
+            {language === 'en' ? 'Occupancy' : '入席率'} {returnCapacity > 0 ? Math.round((returnMatched / returnCapacity) * 100) : 0}%
           </div>
         </div>
 
         <div className="bg-white p-4 md:p-5 rounded-2xl border border-stone-200 shadow-xs">
           <div className="flex items-center justify-between text-stone-500 text-xs md:text-sm font-bold">
-            <span>待安排需求乘客</span>
+            <span>{language === 'en' ? 'Pending Passengers' : '待安排需求乘客'}</span>
             <AlertCircle className="w-5 h-5 text-orange-600" />
           </div>
           <div className="text-2xl md:text-3xl font-black text-orange-600 mt-1.5">
-            {totalPendingPassengers} <span className="text-xs md:text-sm font-normal text-stone-500">人</span>
+            {totalPendingPassengers} <span className="text-xs md:text-sm font-normal text-stone-500">{language === 'en' ? 'passengers' : '人'}</span>
           </div>
           <div className="text-xs text-orange-700 mt-0.5 font-bold">
-            {pendingRequests.length} 筆待調度
+            {language === 'en' ? `${pendingRequests.length} pending` : `${pendingRequests.length} 筆待調度`}
           </div>
         </div>
       </div>
+
+      {/* Urgent Ejected Alert Banner */}
+      {ejectedCount > 0 && (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-3xl p-5 text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-rose-200 text-rose-800 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-6 h-6 text-rose-700" />
+            </div>
+            <div>
+              <h4 className="font-black text-sm md:text-base flex items-center gap-2 flex-wrap">
+                <span>{language === 'en' ? `Priority Alert: ${ejectedCount} Passenger(s) Ejected Due to Vehicle Change/Deletion` : `⚠️ 特別注意：目前有 ${ejectedCount} 筆需求因車輛修改或刪除而彈出！`}</span>
+                <span className="px-2.5 py-0.5 bg-rose-200 text-rose-900 rounded-full text-xs font-black animate-pulse border border-rose-300">
+                  {t.ejectedBadge}
+                </span>
+              </h4>
+              <p className="text-xs md:text-sm text-rose-700 font-medium mt-0.5">
+                {t.ejectedNotice}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- SMART SUGGESTED MATCHING HERO SECTION --- */}
       {totalSuggestionsCount > 0 && (
@@ -756,11 +862,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="flex items-center gap-2">
                 <Wand2 className="w-6 h-6 text-amber-200" />
                 <h3 className="text-lg md:text-xl font-black tracking-tight">
-                  ✨ 系統智慧建議媒合中心 (Smart Suggestion)
+                  ✨ {language === 'en' ? 'System Smart Match Recommendations' : '系統智慧建議媒合中心 (Smart Suggestion)'}
                 </h3>
               </div>
               <p className="text-xs md:text-sm text-amber-100 font-medium">
-                系統已根據「同出發區域」、「義工早到/正行需求」與「空位數」，自動計算出最佳推薦方案！
+                {language === 'en' ? 'The system has calculated optimal pairings based on area, schedule, and remaining seat capacity!' : '系統已根據「同出發區域」、「義工早到/正行需求」與「空位數」，自動計算出最佳推薦方案！'}
               </p>
             </div>
 
@@ -769,7 +875,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               className="px-5 py-3 bg-white hover:bg-stone-50 text-orange-900 rounded-2xl font-black text-xs md:text-sm transition-all cursor-pointer shadow-lg hover:scale-102 flex items-center justify-center gap-2 shrink-0"
             >
               <Sparkles className="w-4 h-4 text-orange-600" />
-              <span>⚡ 一鍵套用所有建議 ({totalSuggestionsCount} 筆)</span>
+              <span>⚡ {language === 'en' ? `Apply All Suggestions (${totalSuggestionsCount})` : `一鍵套用所有建議 (${totalSuggestionsCount} 筆)`}</span>
             </button>
           </div>
         </div>
@@ -781,17 +887,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
           <div>
             <h3 className="text-lg md:text-xl font-black text-stone-900 flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-orange-600" />
-              待協調乘客名冊 ({pendingRequests.length} 筆)
+              {language === 'en' ? `Pending Passenger Requests (${pendingRequests.length})` : `待協調乘客名冊 (${pendingRequests.length} 筆)`}
             </h3>
             <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-              尚未配對之乘客，報名報到組可直接「採納系統建議」或「手動指派」至相應車次！
+              {language === 'en' ? 'For unassigned passengers, you can adopt smart recommendations or manually assign vehicles!' : '尚未配對之乘客，報名報到組可直接「採納系統建議」或「手動指派」至相應車次！'}
             </p>
           </div>
         </div>
 
         {pendingRequests.length === 0 ? (
           <p className="text-sm text-emerald-800 bg-emerald-50 p-4 rounded-2xl text-center font-bold">
-            🎉 太棒了！目前所有乘客的去程與回程需求均已全數安排妥當。
+            {language === 'en' ? '🎉 Great! All passenger rides have been successfully arranged.' : '🎉 太棒了！目前所有乘客的去程與回程需求均已全數安排妥當。'}
           </p>
         ) : (
           <div className="divide-y divide-stone-100 border border-stone-200 rounded-2xl overflow-hidden text-xs md:text-sm">
@@ -801,21 +907,31 @@ export const AdminView: React.FC<AdminViewProps> = ({
               return (
                 <div
                   key={req.id}
-                  className="p-4 md:p-5 bg-white hover:bg-stone-50/50 flex flex-col gap-3"
+                  className={`p-4 md:p-5 flex flex-col gap-3 transition-colors ${
+                    req.isEjected
+                      ? 'bg-rose-50/70 border-l-4 border-l-rose-500 hover:bg-rose-50'
+                      : 'bg-white hover:bg-stone-50/50'
+                  }`}
                 >
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                    <div className="space-y-1">
+                    <div className="space-y-1.5 flex-1">
                       <div className="flex items-center justify-between gap-2.5 flex-wrap">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <span className="font-black text-base md:text-lg text-stone-900">
                             {req.passengerName}
                           </span>
+                          {req.isEjected && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-rose-200 text-rose-900 font-black text-xs flex items-center gap-1 border border-rose-300 animate-pulse">
+                              <AlertCircle className="w-3.5 h-3.5 text-rose-700" />
+                              {t.ejectedBadge}
+                            </span>
+                          )}
                           <span className="px-2.5 py-0.5 rounded bg-orange-100 text-orange-900 font-bold text-xs">
-                            需求 {req.passengerCount} 位
+                            {language === 'en' ? 'Needs' : '需求'} {req.passengerCount} {t.personCountSuffix}
                           </span>
-                          <span className="text-stone-500 font-medium">電話：{req.passengerPhone}</span>
+                          <span className="text-stone-500 font-medium">{language === 'en' ? 'Phone:' : '電話：'}{req.passengerPhone}</span>
                           {req.wechatOrLine && (
-                            <span className="text-stone-500 font-medium">WhatsApp：{req.wechatOrLine}</span>
+                            <span className="text-stone-500 font-medium">WhatsApp: {req.wechatOrLine}</span>
                           )}
                         </div>
 
@@ -829,41 +945,55 @@ export const AdminView: React.FC<AdminViewProps> = ({
                           </button>
                           <button
                             onClick={() => {
-                              if (confirm(t.cancelRequestConfirm)) {
-                                onCancelRequest?.(req.id);
+                              if (confirm(t.deleteRequestConfirm)) {
+                                (onDeleteRequest || onCancelRequest)?.(req.id);
                               }
                             }}
                             className="px-2.5 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
-                            <span>{t.cancelRequestBtn}</span>
+                            <span>{t.deleteRequestBtn}</span>
                           </button>
                         </div>
                       </div>
 
+                      {/* Ejected Reason Callout */}
+                      {req.isEjected && req.ejectedReason && (
+                        <div className="bg-rose-100/90 border border-rose-300 text-rose-950 rounded-xl p-2.5 text-xs flex items-start gap-2 shadow-2xs">
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="font-bold text-rose-900">{t.ejectedReasonPrefix}</strong>
+                            <span>{req.ejectedReason}</span>
+                            {req.ejectedAt && (
+                              <span className="text-rose-600 ml-2 font-mono text-[11px]">({req.ejectedAt})</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="text-stone-700 flex items-center gap-1 font-medium">
                         <MapPin className="w-4 h-4 text-amber-700 shrink-0" />
                         <span>
-                          期望地點：<strong className="text-stone-900">{req.pickupArea}</strong> - {req.pickupPoint}
+                          {language === 'en' ? 'Preferred Location:' : '期望地點：'} <strong className="text-stone-900">{getLocalizedArea(req.pickupArea, language)}</strong> - {req.pickupPoint}
                         </span>
                       </div>
 
                       <div className="flex flex-wrap gap-2 pt-0.5 text-xs">
                         {req.needOutbound && (
                           <span className="px-2.5 py-0.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-bold">
-                            去程需求：{req.outboundRole === 'volunteer' ? '義工組 (08:00前早到)' : '正行組'}
+                            {t.outbound}: {req.outboundRole === 'volunteer' ? (language === 'en' ? 'Volunteer (Early 08:00)' : '義工組 (08:00前早到)') : (language === 'en' ? 'Attendee' : '正行組')}
                           </span>
                         )}
                         {req.needReturn && (
                           <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-stone-800 border border-stone-200 font-bold">
-                            回程需求：{req.returnRole === 'volunteer' ? '義工組 (善後賦歸)' : '正行組 (15:30即回)'}
+                            {t.returnLeg}: {req.returnRole === 'volunteer' ? (language === 'en' ? 'Volunteer (Cleanup)' : '義工組 (善後賦歸)') : (language === 'en' ? 'Attendee (15:30)' : '正行組 (15:30即回)')}
                           </span>
                         )}
                       </div>
 
                       {req.notes && (
                         <div className="text-stone-600 bg-stone-50 p-2 rounded-xl text-xs">
-                          備註：{req.notes}
+                          {language === 'en' ? 'Notes:' : '備註：'}{req.notes}
                         </div>
                       )}
                     </div>
@@ -873,10 +1003,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-3 text-xs md:text-sm space-y-1.5 md:max-w-sm self-stretch md:self-auto flex flex-col justify-between">
                         <div className="flex items-center gap-1.5 font-black text-amber-950">
                           <ThumbsUp className="w-4 h-4 text-amber-700" />
-                          <span>系統推薦最佳車輛：</span>
+                          <span>{language === 'en' ? 'Recommended Vehicle:' : '系統推薦最佳車輛：'}</span>
                         </div>
                         <div className="font-bold text-stone-900 text-xs">
-                          🚗 {suggestion.offer.driverName} ({suggestion.offer.departureArea.split(' ')[0]}，{suggestion.leg === 'both' ? '去回雙程' : suggestion.leg === 'outbound' ? '去程' : '回程'})
+                          🚗 {suggestion.offer.driverName} ({getLocalizedArea(suggestion.offer.departureArea, language).split(',')[0]}，{suggestion.leg === 'both' ? (language === 'en' ? 'Both Ways' : '去回雙程') : suggestion.leg === 'outbound' ? (language === 'en' ? 'Outbound' : '去程') : (language === 'en' ? 'Return' : '回程')})
                         </div>
                         <div className="text-[11px] text-amber-900/80 font-medium">
                           {suggestion.reason}
@@ -886,7 +1016,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                           className="w-full mt-1 py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1 shadow-xs"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>採納此建議指派</span>
+                          <span>{language === 'en' ? 'Adopt Recommendation' : '採納此建議指派'}</span>
                         </button>
                       </div>
                     )}
@@ -894,7 +1024,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                   {/* Manual Assignment Controls */}
                   <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="text-stone-500 font-medium">或自行手動指派其他車次：</span>
+                    <span className="text-stone-500 font-medium">
+                      {language === 'en' ? 'Or manually assign to another vehicle:' : '或自行手動指派其他車次：'}
+                    </span>
                     <div className="flex flex-wrap items-center gap-2">
                       <select
                         value={selectedOfferMap[req.id] || ''}
@@ -906,10 +1038,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         }
                         className="border border-stone-300 rounded-xl px-3 py-1.5 text-xs text-stone-900 font-bold focus:outline-hidden focus:border-amber-500 max-w-[200px]"
                       >
-                        <option value="">-- 手動選擇車輛 --</option>
+                        <option value="">{language === 'en' ? '-- Select Vehicle --' : '-- 手動選擇車輛 --'}</option>
                         {currentOffers.map((o) => (
                           <option key={o.id} value={o.id}>
-                            {o.driverName} ({o.departureArea.split(' ')[0]}，去餘{o.outboundAvailableSeats}/回餘{o.returnAvailableSeats})
+                            {o.driverName} ({getLocalizedArea(o.departureArea, language).split(',')[0]}，{language === 'en' ? `Out:${o.outboundAvailableSeats}/Ret:${o.returnAvailableSeats}` : `去餘${o.outboundAvailableSeats}/回餘${o.returnAvailableSeats}`})
                           </option>
                         ))}
                       </select>
@@ -924,9 +1056,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         }
                         className="border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs text-stone-800 font-bold"
                       >
-                        <option value="both">指派去回雙程</option>
-                        <option value="outbound">僅指派去程</option>
-                        <option value="return">僅指派回程</option>
+                        <option value="both">{language === 'en' ? 'Both Outbound & Return' : '指派去回雙程'}</option>
+                        <option value="outbound">{language === 'en' ? 'Outbound Only' : '僅指派去程'}</option>
+                        <option value="return">{language === 'en' ? 'Return Only' : '僅指派回程'}</option>
                       </select>
 
                       <button
@@ -939,7 +1071,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         }`}
                       >
                         <Send className="w-3 h-3" />
-                        手動指派
+                        {language === 'en' ? 'Assign' : '手動指派'}
                       </button>
                     </div>
                   </div>
@@ -955,9 +1087,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
         <div className="flex items-center justify-between border-b border-stone-100 pb-3">
           <h3 className="text-lg md:text-xl font-black text-stone-900 flex items-center gap-2">
             <Car className="w-6 h-6 text-amber-700" />
-            全場車隊去回程入席調度名冊
+            {language === 'en' ? 'Fleet Manifest & Trip Roster' : '全場車隊去回程入席調度名冊'}
           </h3>
-          <span className="text-xs md:text-sm text-stone-500 font-medium">空山寺中秋普茶</span>
+          <span className="text-xs md:text-sm text-stone-500 font-medium">{currentEvent.title}</span>
         </div>
 
         <div className="space-y-4">
@@ -990,7 +1122,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-3 py-1 rounded-lg bg-white border border-stone-200 text-stone-800 font-bold">
-                    📍 {offer.departureArea} ({offer.departurePoint})
+                    📍 {getLocalizedArea(offer.departureArea, language)} ({offer.departurePoint})
                   </span>
                   <button
                     onClick={() => handleOpenAdminEditOffer(offer)}
@@ -998,6 +1130,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   >
                     <Edit3 className="w-3.5 h-3.5 text-amber-700" />
                     <span>{t.editOfferBtn}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(t.deleteOfferConfirm)) {
+                        onDeleteOffer?.(offer.id);
+                      }
+                    }}
+                    className="px-2.5 py-1 text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{t.deleteOfferBtn}</span>
                   </button>
                 </div>
               </div>
@@ -1008,15 +1151,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="p-4 space-y-2.5">
                   <div className="flex items-center justify-between pb-1.5 border-b border-stone-100">
                     <span className="font-black text-amber-950 flex items-center gap-1.5">
-                      🚙 去程前往空山寺 ({offer.outboundTime})
+                      🚙 {language === 'en' ? 'Outbound to Kong Shan Temple' : '去程前往空山寺'} ({offer.outboundTime})
                     </span>
                     <span className="font-bold text-amber-800 text-xs">
-                      已排 {offer.outboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0)} / {offer.outboundTotalSeats} 席
+                      {language === 'en'
+                        ? `${offer.outboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0)} / ${offer.outboundTotalSeats} seats booked`
+                        : `已排 ${offer.outboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0)} / ${offer.outboundTotalSeats} 席`}
                     </span>
                   </div>
 
                   {offer.outboundPassengers.length === 0 ? (
-                    <p className="text-stone-400 italic py-1 text-xs">尚無去程乘客</p>
+                    <p className="text-stone-400 italic py-1 text-xs">{language === 'en' ? 'No outbound passengers yet' : '尚無去程乘客'}</p>
                   ) : (
                     <div className="space-y-2">
                       {offer.outboundPassengers.map((p) => (
@@ -1025,21 +1170,37 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             <div className="font-bold text-stone-900 flex items-center gap-2">
                               <span>{p.name}</span>
                               <span className="text-xs px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
-                                {p.passengerCount} 人
+                                {p.passengerCount} {language === 'en' ? 'seats' : '人'}
                               </span>
                               <span className={`text-xs px-1.5 py-0.2 rounded font-bold ${
                                 p.role === 'volunteer' ? 'bg-orange-100 text-orange-900' : 'bg-emerald-100 text-emerald-900'
                               }`}>
-                                {p.role === 'volunteer' ? '義工早車' : '正行'}
+                                {p.role === 'volunteer' ? (language === 'en' ? 'Volunteer' : '義工早車') : (language === 'en' ? 'Attendee' : '正行')}
                               </span>
                             </div>
                             <div className="text-xs text-stone-500 mt-0.5 font-medium">
-                              {p.pickupNote || '準時集合'}
+                              {p.pickupNote || (language === 'en' ? 'Meet on time' : '準時集合')}
                             </div>
                           </div>
-                          <a href={`tel:${p.phone}`} className="text-stone-600 hover:text-amber-800">
-                            <Phone className="w-4 h-4" />
-                          </a>
+                          <div className="flex items-center gap-1.5">
+                            <a href={`tel:${p.phone}`} className="text-stone-600 hover:text-amber-800 p-1 rounded-lg hover:bg-stone-200">
+                              <Phone className="w-4 h-4" />
+                            </a>
+                            {onEjectPassenger && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(t.ejectPassengerConfirm)) {
+                                    onEjectPassenger(offer.id, p.id, 'outbound');
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg font-bold cursor-pointer transition-colors flex items-center gap-1"
+                                title={t.ejectPassengerBtn}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span className="hidden sm:inline">{t.ejectPassengerBtn}</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1050,15 +1211,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="p-4 space-y-2.5">
                   <div className="flex items-center justify-between pb-1.5 border-b border-stone-100">
                     <span className="font-black text-stone-900 flex items-center gap-1.5">
-                      🚗 回程返市區 ({offer.returnTime})
+                      🚗 {language === 'en' ? 'Return Heading Back' : '回程返市區'} ({offer.returnTime})
                     </span>
                     <span className="font-bold text-emerald-800 text-xs">
-                      已排 {offer.returnPassengers.reduce((sum, p) => sum + p.passengerCount, 0)} / {offer.returnTotalSeats} 席
+                      {language === 'en'
+                        ? `${offer.returnPassengers.reduce((sum, p) => sum + p.passengerCount, 0)} / ${offer.returnTotalSeats} seats booked`
+                        : `已排 ${offer.returnPassengers.reduce((sum, p) => sum + p.passengerCount, 0)} / ${offer.returnTotalSeats} 席`}
                     </span>
                   </div>
 
                   {offer.returnPassengers.length === 0 ? (
-                    <p className="text-stone-400 italic py-1 text-xs">尚無回程乘客</p>
+                    <p className="text-stone-400 italic py-1 text-xs">{language === 'en' ? 'No return passengers yet' : '尚無回程乘客'}</p>
                   ) : (
                     <div className="space-y-2">
                       {offer.returnPassengers.map((p) => (
@@ -1067,21 +1230,37 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             <div className="font-bold text-stone-900 flex items-center gap-2">
                               <span>{p.name}</span>
                               <span className="text-xs px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
-                                {p.passengerCount} 人
+                                {p.passengerCount} {language === 'en' ? 'seats' : '人'}
                               </span>
                               <span className={`text-xs px-1.5 py-0.2 rounded font-bold ${
                                 p.role === 'volunteer' ? 'bg-orange-100 text-orange-900' : 'bg-emerald-100 text-emerald-900'
                               }`}>
-                                {p.role === 'volunteer' ? '義工善後' : '活動即回'}
+                                {p.role === 'volunteer' ? (language === 'en' ? 'Volunteer' : '義工善後') : (language === 'en' ? 'Attendee' : '活動即回')}
                               </span>
                             </div>
                             <div className="text-xs text-stone-500 mt-0.5 font-medium">
-                              {p.pickupNote || '準時集合'}
+                              {p.pickupNote || (language === 'en' ? 'Meet on time' : '準時集合')}
                             </div>
                           </div>
-                          <a href={`tel:${p.phone}`} className="text-stone-600 hover:text-amber-800">
-                            <Phone className="w-4 h-4" />
-                          </a>
+                          <div className="flex items-center gap-1.5">
+                            <a href={`tel:${p.phone}`} className="text-stone-600 hover:text-amber-800 p-1 rounded-lg hover:bg-stone-200">
+                              <Phone className="w-4 h-4" />
+                            </a>
+                            {onEjectPassenger && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(t.ejectPassengerConfirm)) {
+                                    onEjectPassenger(offer.id, p.id, 'return');
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg font-bold cursor-pointer transition-colors flex items-center gap-1"
+                                title={t.ejectPassengerBtn}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span className="hidden sm:inline">{t.ejectPassengerBtn}</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1100,10 +1279,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-black text-stone-900">
-                  代長輩電話登記
+                  {language === 'en' ? 'Assisted Phone Registration' : language === 'zh-CN' ? '代长辈电话登记' : '代長輩電話登記'}
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-                  接獲長輩或朋友電話報名時，報名報到組可直接在此登打
+                  {language === 'en' ? 'When receiving calls from seniors or friends, registration desk can input details here' : language === 'zh-CN' ? '接获长辈或朋友电话报名时，报名报到组可直接在此登打' : '接獲長輩或朋友電話報名時，報名報到組可直接在此登打'}
                 </p>
               </div>
               <button
@@ -1125,7 +1304,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       : 'bg-stone-100 text-stone-600'
                   }`}
                 >
-                  登記搭乘需求（無車）
+                  {language === 'en' ? 'Ride Request (No Car)' : language === 'zh-CN' ? '登记搭乘需求（无车）' : '登記搭乘需求（無車）'}
                 </button>
                 <button
                   type="button"
@@ -1136,18 +1315,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       : 'bg-stone-100 text-stone-600'
                   }`}
                 >
-                  登記提供車位（有車）
+                  {language === 'en' ? 'Offer Seats (Has Car)' : language === 'zh-CN' ? '登记提供车位（有车）' : '登記提供車位（有車）'}
                 </button>
               </div>
 
               <div>
                 <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                  乘客姓名 <span className="text-red-500">*</span>
+                  {language === 'en' ? 'Full Name' : language === 'zh-CN' ? '乘客/车主姓名' : '乘客/車主姓名'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="例：陳阿姨 (由報名報到組代錄)"
+                  placeholder={language === 'en' ? 'e.g. Auntie Chen (Entered by Registration Desk)' : language === 'zh-CN' ? '例：陈阿姨 (由报名报到组代录)' : '例：陳阿姨 (由報名報到組代錄)'}
                   value={elderlyName}
                   onChange={(e) => setElderlyName(e.target.value)}
                   className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1157,12 +1336,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    聯絡電話 <span className="text-red-500">*</span>
+                    {t.requestPhoneLabel} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
                     required
-                    placeholder="例：917-000-1111"
+                    placeholder={language === 'en' ? 'e.g. 917-000-1111' : '例：917-000-1111'}
                     value={elderlyPhone}
                     onChange={(e) => setElderlyPhone(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1171,11 +1350,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    WhatsApp (選填)
+                    WhatsApp ({language === 'en' ? 'Optional' : language === 'zh-CN' ? '选填' : '選填'})
                   </label>
                   <input
                     type="text"
-                    placeholder="例：+1 917-xxx-xxxx"
+                    placeholder={language === 'en' ? 'e.g. +1 917-xxx-xxxx' : '例：+1 917-xxx-xxxx'}
                     value={elderlyWechat}
                     onChange={(e) => setElderlyWechat(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1186,7 +1365,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    出發區域 <span className="text-red-500">*</span>
+                    {t.requestAreaLabel} <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={elderlyArea}
@@ -1195,7 +1374,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   >
                     {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
                       <option key={a} value={a}>
-                        {a}
+                        {getLocalizedArea(a, language)}
                       </option>
                     ))}
                   </select>
@@ -1203,7 +1382,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    人數 <span className="text-red-500">*</span>
+                    {language === 'en' ? 'Count / Seats' : language === 'zh-CN' ? '人数 / 车位' : '人數 / 車位'} <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={elderlyCount}
@@ -1212,7 +1391,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   >
                     {[1, 2, 3, 4].map((n) => (
                       <option key={n} value={n}>
-                        {n} 位
+                        {n} {t.personCountSuffix}
                       </option>
                     ))}
                   </select>
@@ -1221,12 +1400,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
               <div>
                 <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                  詳細集合地點說明 <span className="text-red-500">*</span>
+                  {language === 'en' ? 'Pickup / Meeting Location' : language === 'zh-CN' ? '详细集合地点说明' : '詳細集合地點說明'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="例：法拉盛緬街圖書館前、孔子大廈門口..."
+                  placeholder={language === 'en' ? 'e.g. Flushing Main St Library, Chinatown Confucius Plaza...' : language === 'zh-CN' ? '例：法拉盛缅街图书馆前、孔子大厦门口...' : '例：法拉盛緬街圖書館前、孔子大廈門口...'}
                   value={elderlyPoint}
                   onChange={(e) => setElderlyPoint(e.target.value)}
                   className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1236,40 +1415,40 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="grid grid-cols-2 gap-2.5 bg-stone-50 p-3 rounded-2xl border border-stone-200">
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs">
-                    去程身份
+                    {language === 'en' ? 'Outbound Role' : language === 'zh-CN' ? '去程身份' : '去程身份'}
                   </label>
                   <select
                     value={elderlyOutboundRole}
                     onChange={(e) => setElderlyOutboundRole(e.target.value as ParticipantRole)}
                     className="w-full px-2.5 py-2 border border-stone-300 rounded-lg text-xs font-bold"
                   >
-                    <option value="volunteer">義工組（早到服務）</option>
-                    <option value="attendee">正行組（參加活動）</option>
+                    <option value="volunteer">{language === 'en' ? 'Volunteer (Early service)' : language === 'zh-CN' ? '义工组（早到服务）' : '義工組（早到服務）'}</option>
+                    <option value="attendee">{language === 'en' ? 'Attendee (Event only)' : language === 'zh-CN' ? '正行组（参加活动）' : '正行組（參加活動）'}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs">
-                    回程身份
+                    {language === 'en' ? 'Return Role' : language === 'zh-CN' ? '回程身份' : '回程身份'}
                   </label>
                   <select
                     value={elderlyReturnRole}
                     onChange={(e) => setElderlyReturnRole(e.target.value as ParticipantRole)}
                     className="w-full px-2.5 py-2 border border-stone-300 rounded-lg text-xs font-bold"
                   >
-                    <option value="attendee">正行組（活動結束回）</option>
-                    <option value="volunteer">義工組（善後完畢回）</option>
+                    <option value="attendee">{language === 'en' ? 'Attendee (Depart after event)' : language === 'zh-CN' ? '正行组（活动结束回）' : '正行組（活動結束回）'}</option>
+                    <option value="volunteer">{language === 'en' ? 'Volunteer (Depart after cleanup)' : language === 'zh-CN' ? '义工组（善后完毕回）' : '義工組（善後完畢回）'}</option>
                   </select>
                 </div>
               </div>
 
               <div>
                 <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                  備註
+                  {t.driverNotesLabel}
                 </label>
                 <input
                   type="text"
-                  placeholder="例：年長行動較慢、需搭乘平穩轎車..."
+                  placeholder={language === 'en' ? 'e.g. Senior walks slowly, prefers steady ride...' : language === 'zh-CN' ? '例：年长行动较慢、需搭乘平稳轿车...' : '例：年長行動較慢、需搭乘平穩轎車...'}
                   value={elderlyNotes}
                   onChange={(e) => setElderlyNotes(e.target.value)}
                   className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1282,13 +1461,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   onClick={() => setIsPhoneModalOpen(false)}
                   className="flex-1 py-3.5 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
                 >
-                  取消
+                  {t.cancelEditBtn}
                 </button>
                 <button
                   type="submit"
                   className="flex-1 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
                 >
-                  確認登記
+                  {language === 'en' ? 'Confirm Registration' : language === 'zh-CN' ? '确认登记' : '確認登記'}
                 </button>
               </div>
             </form>
@@ -1304,10 +1483,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div>
                 <h3 className="text-xl font-black text-stone-900 flex items-center gap-2">
                   <Edit3 className="w-5 h-5 text-amber-700" />
-                  修改乘客搭車需求
+                  {t.editRequestModalTitle}
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-                  報名報到組後台管理修訂
+                  {language === 'en' ? 'Registration Desk Records Modification' : language === 'zh-CN' ? '报名报到组后台管理修订' : '報名報到組後台管理修訂'}
                 </p>
               </div>
               <button
@@ -1320,7 +1499,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
             <form onSubmit={handleSaveAdminEditRequest} className="space-y-4 text-xs md:text-sm">
               <div>
-                <label className="block text-stone-800 font-bold mb-1">乘客姓名 <span className="text-red-500">*</span></label>
+                <label className="block text-stone-800 font-bold mb-1">{t.requestNameLabel} <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -1332,7 +1511,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">聯絡電話 <span className="text-red-500">*</span></label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.requestPhoneLabel} <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
                     required
@@ -1354,33 +1533,33 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">接送區域</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.requestAreaLabel}</label>
                   <select
                     value={adminEditReqArea}
                     onChange={(e) => setAdminEditReqArea(e.target.value)}
                     className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl font-bold"
                   >
                     {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
-                      <option key={a} value={a}>{a}</option>
+                      <option key={a} value={a}>{getLocalizedArea(a, language)}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">需求人數</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.requestCountLabel}</label>
                   <select
                     value={adminEditReqCount}
                     onChange={(e) => setAdminEditReqCount(Number(e.target.value))}
                     className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl font-bold"
                   >
                     {[1, 2, 3, 4].map((n) => (
-                      <option key={n} value={n}>{n} 位</option>
+                      <option key={n} value={n}>{n} {t.personCountSuffix}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-stone-800 font-bold mb-1">具體地點</label>
+                <label className="block text-stone-800 font-bold mb-1">{t.requestPointLabel}</label>
                 <input
                   type="text"
                   value={adminEditReqPoint}
@@ -1398,7 +1577,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       onChange={(e) => setAdminEditReqNeedOutbound(e.target.checked)}
                       className="w-4 h-4 text-amber-600 rounded"
                     />
-                    <span>需要去程</span>
+                    <span>{t.requestOutboundCheck}</span>
                   </label>
                   {adminEditReqNeedOutbound && (
                     <select
@@ -1406,8 +1585,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       onChange={(e) => setAdminEditReqOutboundRole(e.target.value as ParticipantRole)}
                       className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
                     >
-                      <option value="volunteer">義工 (早到)</option>
-                      <option value="attendee">正行</option>
+                      <option value="volunteer">{language === 'en' ? 'Volunteer (Early)' : language === 'zh-CN' ? '义工 (早到)' : '義工 (早到)'}</option>
+                      <option value="attendee">{language === 'en' ? 'Attendee' : language === 'zh-CN' ? '正行' : '正行'}</option>
                     </select>
                   )}
                 </div>
@@ -1420,7 +1599,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       onChange={(e) => setAdminEditReqNeedReturn(e.target.checked)}
                       className="w-4 h-4 text-amber-600 rounded"
                     />
-                    <span>需要回程</span>
+                    <span>{t.requestReturnCheck}</span>
                   </label>
                   {adminEditReqNeedReturn && (
                     <select
@@ -1428,15 +1607,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       onChange={(e) => setAdminEditReqReturnRole(e.target.value as ParticipantRole)}
                       className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
                     >
-                      <option value="attendee">正行 (活動後即回)</option>
-                      <option value="volunteer">義工 (善後)</option>
+                      <option value="attendee">{language === 'en' ? 'Attendee (After event)' : language === 'zh-CN' ? '正行 (活动后即回)' : '正行 (活動後即回)'}</option>
+                      <option value="volunteer">{language === 'en' ? 'Volunteer (Cleanup)' : language === 'zh-CN' ? '义工 (善后)' : '義工 (善後)'}</option>
                     </select>
                   )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-stone-800 font-bold mb-1">備註說明</label>
+                <label className="block text-stone-800 font-bold mb-1">{t.requestNotesLabel}</label>
                 <input
                   type="text"
                   value={adminEditReqNotes}
@@ -1451,13 +1630,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   onClick={() => setAdminEditingRequest(null)}
                   className="flex-1 py-3 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
                 >
-                  取消
+                  {t.cancelEditBtn}
                 </button>
                 <button
                   type="submit"
                   className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
                 >
-                  儲存修改
+                  {t.saveChangesBtn}
                 </button>
               </div>
             </form>
@@ -1473,10 +1652,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div>
                 <h3 className="text-xl font-black text-stone-900 flex items-center gap-2">
                   <Edit3 className="w-5 h-5 text-amber-700" />
-                  修改車輛資訊
+                  {t.editOfferModalTitle}
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-                  報名報到組後台管理修訂
+                  {language === 'en' ? 'Registration Desk Records Modification' : language === 'zh-CN' ? '报名报到组后台管理修订' : '報名報到組後台管理修訂'}
                 </p>
               </div>
               <button
@@ -1490,7 +1669,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <form onSubmit={handleSaveAdminEditOffer} className="space-y-4 text-xs md:text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">車主姓名</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverNameLabel}</label>
                   <input
                     type="text"
                     required
@@ -1500,7 +1679,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">車主電話</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverPhoneLabel}</label>
                   <input
                     type="tel"
                     required
@@ -1522,21 +1701,21 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">出發區域</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverAreaLabel}</label>
                   <select
                     value={adminEditDriverArea}
                     onChange={(e) => setAdminEditDriverArea(e.target.value)}
                     className="w-full px-3 py-2 border border-stone-300 rounded-xl font-bold"
                   >
                     {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
-                      <option key={a} value={a}>{a}</option>
+                      <option key={a} value={a}>{getLocalizedArea(a, language)}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-stone-800 font-bold mb-1">集合接送點</label>
+                <label className="block text-stone-800 font-bold mb-1">{t.driverPointLabel}</label>
                 <input
                   type="text"
                   value={adminEditDriverPoint}
@@ -1547,7 +1726,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">車型</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverCarModelLabel}</label>
                   <input
                     type="text"
                     value={adminEditCarModel}
@@ -1556,7 +1735,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">車色</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverCarColorLabel}</label>
                   <input
                     type="text"
                     value={adminEditCarColor}
@@ -1565,7 +1744,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-stone-800 font-bold mb-1">車牌</label>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverPlateLabel}</label>
                   <input
                     type="text"
                     value={adminEditPlateNumber}
@@ -1578,7 +1757,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               {/* Legs */}
               <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-stone-900">去程出發時間 / 車位：</span>
+                  <span className="font-bold text-stone-900">{language === 'en' ? 'Outbound Time / Seats:' : language === 'zh-CN' ? '去程出发时间 / 车位：' : '去程出發時間 / 車位：'}</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
@@ -1592,14 +1771,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
                     >
                       {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-                        <option key={n} value={n}>{n} 位</option>
+                        <option key={n} value={n}>{n} {t.seatCountSuffix}</option>
                       ))}
                     </select>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-stone-200">
-                  <span className="font-bold text-stone-900">回程出發時間 / 車位：</span>
+                  <span className="font-bold text-stone-900">{language === 'en' ? 'Return Time / Seats:' : language === 'zh-CN' ? '回程出发时间 / 车位：' : '回程出發時間 / 車位：'}</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
@@ -1613,7 +1792,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
                     >
                       {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-                        <option key={n} value={n}>{n} 位</option>
+                        <option key={n} value={n}>{n} {t.seatCountSuffix}</option>
                       ))}
                     </select>
                   </div>
@@ -1621,7 +1800,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-stone-800 font-bold mb-1">備註說明</label>
+                <label className="block text-stone-800 font-bold mb-1">{t.driverNotesLabel}</label>
                 <input
                   type="text"
                   value={adminEditNotes}
@@ -1630,19 +1809,84 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 />
               </div>
 
+              {/* Currently Assigned Passengers with Eject Buttons */}
+              {(adminEditingOffer.outboundPassengers.length > 0 || adminEditingOffer.returnPassengers.length > 0) && (
+                <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200 space-y-2 text-xs">
+                  <span className="font-black text-amber-950 block text-xs md:text-sm">
+                    {language === 'en' ? '👥 Currently Assigned Passengers (Click to Eject):' : '👥 目前已排入之搭乘名單（可個別點擊移出彈出）：'}
+                  </span>
+
+                  {adminEditingOffer.outboundPassengers.map((p) => (
+                    <div key={`edit-out-${p.id}`} className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-amber-100 shadow-2xs">
+                      <div>
+                        <span className="font-bold text-stone-900">{p.name}</span>
+                        <span className="ml-1 text-stone-500 font-medium">({language === 'en' ? 'Outbound' : '去程'} • {p.passengerCount} {t.personCountSuffix})</span>
+                      </div>
+                      {onEjectPassenger && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(t.ejectPassengerConfirm)) {
+                              onEjectPassenger(adminEditingOffer.id, p.id, 'outbound');
+                              setAdminEditingOffer((prev) => prev ? {
+                                ...prev,
+                                outboundPassengers: prev.outboundPassengers.filter((x) => x.id !== p.id),
+                                outboundAvailableSeats: Math.min(prev.outboundTotalSeats, prev.outboundAvailableSeats + p.passengerCount),
+                              } : null);
+                            }
+                          }}
+                          className="px-2.5 py-1 text-xs text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg font-bold cursor-pointer transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>{t.ejectPassengerBtn}</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {adminEditingOffer.returnPassengers.map((p) => (
+                    <div key={`edit-ret-${p.id}`} className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-amber-100 shadow-2xs">
+                      <div>
+                        <span className="font-bold text-stone-900">{p.name}</span>
+                        <span className="ml-1 text-stone-500 font-medium">({language === 'en' ? 'Return' : '回程'} • {p.passengerCount} {t.personCountSuffix})</span>
+                      </div>
+                      {onEjectPassenger && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(t.ejectPassengerConfirm)) {
+                              onEjectPassenger(adminEditingOffer.id, p.id, 'return');
+                              setAdminEditingOffer((prev) => prev ? {
+                                ...prev,
+                                returnPassengers: prev.returnPassengers.filter((x) => x.id !== p.id),
+                                returnAvailableSeats: Math.min(prev.returnTotalSeats, prev.returnAvailableSeats + p.passengerCount),
+                              } : null);
+                            }
+                          }}
+                          className="px-2.5 py-1 text-xs text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg font-bold cursor-pointer transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>{t.ejectPassengerBtn}</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="pt-2 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setAdminEditingOffer(null)}
                   className="flex-1 py-3 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
                 >
-                  取消
+                  {t.cancelEditBtn}
                 </button>
                 <button
                   type="submit"
                   className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
                 >
-                  儲存修改
+                  {t.saveChangesBtn}
                 </button>
               </div>
             </form>

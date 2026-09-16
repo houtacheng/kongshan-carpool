@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Event, CarpoolOffer, RideRequest, ParticipantRole } from '../types';
 import { EAST_COAST_AREAS, getLocalizedEvent } from '../data/mockData';
 import { useLanguage } from '../i18n/LanguageContext';
+import { getLocalizedArea } from '../i18n/translations';
 import {
   MapPin,
   Clock,
@@ -22,6 +23,7 @@ import {
   Utensils,
   HelpCircle,
   Edit3,
+  AlertCircle,
   Trash2,
   FileText
 } from 'lucide-react';
@@ -211,12 +213,12 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
     e.preventDefault();
     if (!bookingOffer) return;
     if (!passengerName.trim() || !passengerPhone.trim()) {
-      alert('請填寫搭乘者姓名與聯絡電話！');
+      alert(language === 'en' ? 'Please provide passenger name and contact phone number.' : '請填寫搭乘者姓名與聯絡電話！');
       return;
     }
 
     if (!bookOutbound && !bookReturn) {
-      alert('請至少勾選預約「去程」或「回程」車位！');
+      alert(t.modalSelectLegWarning);
       return;
     }
 
@@ -236,33 +238,35 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
     if (success) {
       const parts = [];
       if (bookOutbound) {
-        parts.push(`去程（${outboundRole === 'volunteer' ? '義工車' : '正行車'}）：${bookingOffer.outboundTime}`);
+        const roleLabel = outboundRole === 'volunteer' ? t.roleVolunteer : t.roleAttendee;
+        parts.push(`${t.outbound} (${roleLabel}): ${bookingOffer.outboundTime}`);
       }
       if (bookReturn) {
-        parts.push(`回程（${returnRole === 'volunteer' ? '義工車' : '正行車'}）：${bookingOffer.returnTime}`);
+        const roleLabel = returnRole === 'volunteer' ? t.roleVolunteer : t.roleAttendee;
+        parts.push(`${t.returnLeg} (${roleLabel}): ${bookingOffer.returnTime}`);
       }
 
       setBookingSuccessInfo({
         driverName: bookingOffer.driverName,
         driverPhone: bookingOffer.driverPhone,
         wechatOrLine: bookingOffer.wechatOrLine,
-        pickupPoint: `${bookingOffer.departureArea} - ${bookingOffer.departurePoint}`,
+        pickupPoint: `${getLocalizedArea(bookingOffer.departureArea, language)} - ${bookingOffer.departurePoint}`,
         details: parts.join(' ｜ '),
       });
       setBookingOffer(null);
     } else {
-      alert('所選車次的剩餘空位不足，請調整人數或選擇其他車次。');
+      alert(language === 'en' ? 'Insufficient available seats in this ride. Please adjust passenger count or choose another ride.' : '所選車次的剩餘空位不足，請調整人數或選擇其他車次。');
     }
   };
 
   const handleSubmitRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!reqName.trim() || !reqPhone.trim()) {
-      alert('請填寫姓名與聯絡電話');
+      alert(language === 'en' ? 'Please provide passenger name and contact phone number.' : '請填寫姓名與聯絡電話');
       return;
     }
     if (!reqNeedOutbound && !reqNeedReturn) {
-      alert('請至少勾選需要「去程」或「回程」！');
+      alert(t.modalSelectLegWarning);
       return;
     }
 
@@ -272,7 +276,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
       passengerPhone: reqPhone.trim(),
       wechatOrLine: reqWechat.trim() || undefined,
       pickupArea: reqArea,
-      pickupPoint: reqPoint.trim() || '配合車主集合點',
+      pickupPoint: reqPoint.trim() || t.requestDefaultPickupPoint,
       passengerCount: reqCount,
       needOutbound: reqNeedOutbound,
       outboundRole: reqOutboundRole,
@@ -413,8 +417,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
         <div className="pt-2 flex items-start gap-2 text-xs md:text-sm text-stone-800 bg-amber-50 p-3 rounded-2xl border border-amber-200 leading-relaxed font-medium">
           <Info className="w-5 h-5 shrink-0 text-amber-700 mt-0.5" />
           <div>
-            <strong>搭車小撇步：</strong>
-            義工朋友若需清晨提早出發協助素烤備餐或佈置，可<strong>單獨預約【義工車去程】(06:30出發)</strong>；下午 15:30 活動結束若需先行返回紐約，亦可<strong>分開預約【正行車回程】(15:30出發)</strong>，自由組合最安心！
+            <strong>{t.decoupledTipTitle} </strong>
+            {t.decoupledTipContent}
           </div>
         </div>
       </div>
@@ -431,7 +435,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 selectedLeg === 'all' ? 'bg-white text-stone-900 shadow-xs ring-1 ring-stone-200' : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              全部車次
+              {t.filterAllLegs}
             </button>
             <button
               onClick={() => setSelectedLeg('outbound')}
@@ -439,7 +443,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 selectedLeg === 'outbound' ? 'bg-amber-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              🚙 前往空山寺（去程）
+              {t.filterOutboundLeg}
             </button>
             <button
               onClick={() => setSelectedLeg('return')}
@@ -447,13 +451,13 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 selectedLeg === 'return' ? 'bg-amber-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              🚗 返回市區（回程）
+              {t.filterReturnLeg}
             </button>
           </div>
 
           {/* Role Filter Chips */}
           <div className="flex items-center gap-1.5 text-xs md:text-sm">
-            <span className="text-stone-500 font-bold">車次類型：</span>
+            <span className="text-stone-500 font-bold">{t.filterRoleTypeLabel}</span>
             <button
               onClick={() => setSelectedRoleFilter('all')}
               className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-colors ${
@@ -462,7 +466,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                   : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
               }`}
             >
-              全部
+              {t.filterRoleAll}
             </button>
             <button
               onClick={() => setSelectedRoleFilter('volunteer')}
@@ -473,7 +477,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               }`}
             >
               <Flame className="w-3.5 h-3.5" />
-              義工班次（早到）
+              {t.filterRoleVolunteer}
             </button>
             <button
               onClick={() => setSelectedRoleFilter('attendee')}
@@ -484,7 +488,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               }`}
             >
               <Sun className="w-3.5 h-3.5" />
-              正行班次（活動）
+              {t.filterRoleAttendee}
             </button>
           </div>
         </div>
@@ -502,7 +506,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     : 'bg-stone-50 border border-stone-200 text-stone-700 hover:bg-stone-100'
                 }`}
               >
-                {area}
+                {getLocalizedArea(area, language)}
               </button>
             ))}
           </div>
@@ -512,7 +516,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
-                placeholder="搜尋地點、車主..."
+                placeholder={t.searchPlaceholder}
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 className="w-full bg-stone-50 pl-9 pr-3 py-2 text-sm border border-stone-200 rounded-xl focus:outline-hidden focus:border-amber-500 focus:bg-white"
@@ -529,7 +533,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     : 'text-stone-700 hover:bg-white'
                 }`}
               >
-                🚗 現有車位 ({filteredOffers.length})
+                🚗 {t.tabAvailableCars} ({filteredOffers.length})
               </button>
               <button
                 onClick={() => setActivePassengerSection('my-requests')}
@@ -548,7 +552,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs md:text-sm font-black transition-colors cursor-pointer shrink-0 border border-orange-200 shadow-2xs"
             >
               <PlusCircle className="w-4 h-4 text-orange-700" />
-              <span>登記搭車需求 {pendingRequestsCount > 0 && `(${pendingRequestsCount})`}</span>
+              <span>{t.registerMyRequestBtn} {pendingRequestsCount > 0 && `(${pendingRequestsCount})`}</span>
             </button>
           </div>
         </div>
@@ -567,7 +571,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               className="text-xs md:text-sm bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               <PlusCircle className="w-4 h-4" />
-              登記新需求
+              {t.registerNewRequestBtn}
             </button>
           </div>
 
@@ -582,7 +586,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-600 text-white font-bold text-sm hover:bg-orange-700 transition-colors cursor-pointer shadow-xs"
               >
                 <PlusCircle className="w-4 h-4" />
-                立即登記搭車需求
+                {t.registerMyRequestBtn}
               </button>
             </div>
           ) : (
@@ -600,8 +604,14 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-black text-lg text-stone-900">{req.passengerName}</span>
                             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold">
-                              {req.passengerCount} 位
+                              {req.passengerCount} {t.personCountSuffix}
                             </span>
+                            {req.isEjected && (
+                              <span className="text-xs px-2.5 py-0.5 rounded-full font-black bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1 animate-pulse">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                                {t.ejectedBadge}
+                              </span>
+                            )}
                             <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                               req.status === 'matched_full'
                                 ? 'bg-emerald-100 text-emerald-800'
@@ -609,7 +619,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-orange-100 text-orange-800'
                             }`}>
-                              {req.status === 'matched_full' ? '已全數媒合' : req.status === 'matched_partial' ? '部分媒合' : '等候安排中'}
+                              {req.status === 'matched_full' ? t.statusMatchedFull : req.status === 'matched_partial' ? t.statusMatchedPartial : t.statusPending}
                             </span>
                           </div>
                           <p className="text-xs md:text-sm text-stone-600 flex items-center gap-1 mt-1 font-medium">
@@ -617,6 +627,16 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                             <span>{req.passengerPhone}</span>
                             {req.wechatOrLine && <span className="text-stone-400">({req.wechatOrLine})</span>}
                           </p>
+
+                          {req.isEjected && req.ejectedReason && (
+                            <div className="mt-2 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-2.5 text-xs space-y-0.5">
+                              <div className="font-bold flex items-center gap-1 text-rose-900">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                                <span>{t.ejectedReasonPrefix}{req.ejectedReason}</span>
+                              </div>
+                              <p className="text-[11px] text-rose-600">{t.ejectedNotice}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -624,28 +644,28 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         <div className="flex items-start gap-2 text-stone-700">
                           <MapPin className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                           <span>
-                            <strong className="text-stone-900">{req.pickupArea}</strong> - {req.pickupPoint || '未填具體地標'}
+                            <strong className="text-stone-900">{getLocalizedArea(req.pickupArea, language)}</strong> - {req.pickupPoint || (language === 'en' ? 'Coordinate with driver' : '配合車主集合點')}
                           </span>
                         </div>
 
                         <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-stone-600">去程：</span>
+                            <span className="font-bold text-stone-600">{t.outbound}：</span>
                             <span className="font-bold text-stone-900">
-                              {req.needOutbound ? `需要 (${req.outboundRole === 'volunteer' ? '義工' : '正行'})` : '不需要'}
+                              {req.needOutbound ? `${t.needLabel} (${req.outboundRole === 'volunteer' ? t.roleVolunteer : t.roleAttendee})` : t.notNeedLabel}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-stone-600">回程：</span>
+                            <span className="font-bold text-stone-600">{t.returnLeg}：</span>
                             <span className="font-bold text-stone-900">
-                              {req.needReturn ? `需要 (${req.returnRole === 'volunteer' ? '義工' : '正行'})` : '不需要'}
+                              {req.needReturn ? `${t.needLabel} (${req.returnRole === 'volunteer' ? t.roleVolunteer : t.roleAttendee})` : t.notNeedLabel}
                             </span>
                           </div>
                         </div>
 
                         {req.notes && (
                           <div className="text-stone-500 text-xs italic bg-amber-50/50 p-2 rounded-lg border border-amber-100">
-                            備註：{req.notes}
+                            {t.modalNotesLabel}：{req.notes}
                           </div>
                         )}
                       </div>
@@ -682,12 +702,12 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
           <div className="flex items-center justify-between mb-3.5">
             <h3 className="font-black text-lg md:text-xl text-stone-900 flex items-center gap-2">
               <Car className="w-6 h-6 text-amber-700" />
-              可搭乘車次清單
+              {t.activeCarsListTitle}
               <span className="text-xs md:text-sm px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
-                共 {filteredOffers.length} 輛車
+                {t.carCountBadge.replace('{count}', String(filteredOffers.length))}
               </span>
             </h3>
-            <span className="text-xs md:text-sm text-stone-500 font-medium">可單選去程或回程</span>
+            <span className="text-xs md:text-sm text-stone-500 font-medium">{t.flexibleLegChoice}</span>
           </div>
 
         {filteredOffers.length === 0 ? (
@@ -695,16 +715,16 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
               <Car className="w-7 h-7" />
             </div>
-            <p className="text-stone-800 font-bold text-base">該區域或時段目前暫無相應車位</p>
+            <p className="text-stone-800 font-bold text-base">{t.emptyCarsTitle}</p>
             <p className="text-xs md:text-sm text-stone-500 max-w-sm mx-auto leading-relaxed">
-              您可以點擊下方按鈕登記「搭乘需求」，註明您是義工或正行參加者，報名報到組將為您協調美東車位！
+              {t.emptyCarsDesc}
             </p>
             <button
               onClick={() => setIsRequestModalOpen(true)}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 text-white font-bold text-sm hover:bg-amber-700 transition-colors cursor-pointer shadow-xs"
             >
               <PlusCircle className="w-4 h-4" />
-              登記我的搭車需求
+              {t.registerMyRequestBtn}
             </button>
           </div>
         ) : (
@@ -726,7 +746,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-3">
                       <div>
                         <div className="inline-block px-3 py-1 rounded-lg bg-stone-100 text-stone-900 font-bold text-xs md:text-sm">
-                          📍 {offer.departureArea}
+                          📍 {getLocalizedArea(offer.departureArea, language)}
                         </div>
                         <h4 className="text-base md:text-lg font-black text-stone-900 mt-1.5 flex items-center gap-1.5">
                           {offer.departurePoint}
@@ -750,16 +770,16 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 font-black text-stone-900">
                             <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-900 text-xs font-bold">
-                              去程
+                              {t.outbound}
                             </span>
-                            <span>前往空山寺</span>
+                            <span>{t.toTemple}</span>
                             {offer.outboundMode === 'volunteer' ? (
                               <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-900 text-xs font-bold">
-                                義工班次（早到）
+                                {t.volunteerEarlyBadge}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs font-bold">
-                                正行班次
+                                {t.attendeeRegularBadge}
                               </span>
                             )}
                           </div>
@@ -767,17 +787,17 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                           <div className="font-black text-sm">
                             {offer.outboundAvailableSeats > 0 ? (
                               <span className="text-amber-800">
-                                剩 {offer.outboundAvailableSeats} / {offer.outboundTotalSeats} 位
+                                {t.seatsCountRemaining.replace('{avail}', String(offer.outboundAvailableSeats)).replace('{total}', String(offer.outboundTotalSeats))}
                               </span>
                             ) : (
-                              <span className="text-stone-400">已額滿</span>
+                              <span className="text-stone-400">{t.fullSeats}</span>
                             )}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 text-stone-700 font-medium">
                           <Clock className="w-4 h-4 text-amber-700 shrink-0" />
-                          <span>出發時間：<strong className="text-stone-900">{offer.outboundTime}</strong></span>
+                          <span>{t.departureTime}：<strong className="text-stone-900">{offer.outboundTime}</strong></span>
                         </div>
                       </div>
                     )}
@@ -788,16 +808,16 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 font-black text-stone-900">
                             <span className="px-2 py-0.5 rounded bg-stone-200 text-stone-800 text-xs font-bold">
-                              回程
+                              {t.returnLeg}
                             </span>
-                            <span>返回 {offer.departureArea.split(' ')[0]}</span>
+                            <span>{t.returningToArea} {getLocalizedArea(offer.departureArea, language)}</span>
                             {offer.returnMode === 'volunteer' ? (
                               <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-900 text-xs font-bold">
-                                義工班次（善後返回）
+                                {t.volunteerAfterCleanup}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-xs font-bold">
-                                正行班次（結束即回）
+                                {t.attendeeAfterProgram}
                               </span>
                             )}
                           </div>
@@ -805,17 +825,17 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                           <div className="font-black text-sm">
                             {offer.returnAvailableSeats > 0 ? (
                               <span className="text-emerald-800">
-                                剩 {offer.returnAvailableSeats} / {offer.returnTotalSeats} 位
+                                {t.seatsCountRemaining.replace('{avail}', String(offer.returnAvailableSeats)).replace('{total}', String(offer.returnTotalSeats))}
                               </span>
                             ) : (
-                              <span className="text-stone-400">已額滿</span>
+                              <span className="text-stone-400">{t.fullSeats}</span>
                             )}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 text-stone-700 font-medium">
                           <Clock className="w-4 h-4 text-stone-500 shrink-0" />
-                          <span>返程時間：<strong className="text-stone-900">{offer.returnTime}</strong></span>
+                          <span>{t.returnDepartureTime}：<strong className="text-stone-900">{offer.returnTime}</strong></span>
                         </div>
                       </div>
                     )}
@@ -840,11 +860,11 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                       }`}
                     >
                       {totallyFull ? (
-                        <span>該車次已全數額滿</span>
+                        <span>{t.allLegsFull}</span>
                       ) : (
                         <>
                           <CheckCircle2 className="w-5 h-5" />
-                          <span>預約此車位（可自選去程/回程）</span>
+                          <span>{t.bookThisRideBtn}</span>
                         </>
                       )}
                     </button>
@@ -864,10 +884,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             <div className="border-b border-stone-200 pb-3.5 flex items-center justify-between">
               <div>
                 <h3 className="text-xl md:text-2xl font-black text-stone-900">
-                  預約車位登記
+                  {t.modalBookingTitle}
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-1 font-medium">
-                  車主：{bookingOffer.driverName} • {bookingOffer.departureArea}
+                  {t.carOwner}：{bookingOffer.driverName} • {getLocalizedArea(bookingOffer.departureArea, language)}
                 </p>
               </div>
               <button
@@ -882,8 +902,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               {/* Leg Selection with Role */}
               <div className="space-y-3 bg-stone-50 p-4 rounded-2xl border border-stone-200">
                 <div className="font-bold text-stone-900 text-sm md:text-base flex items-center justify-between">
-                  <span>請勾選欲搭乘的行程：</span>
-                  <span className="text-amber-800 text-xs font-bold">可單選去程或回程</span>
+                  <span>{t.selectLegPrompt}</span>
+                  <span className="text-amber-800 text-xs font-bold">{t.flexibleLegChoice}</span>
                 </div>
 
                 {/* Outbound Checkbox */}
@@ -902,16 +922,16 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                           onChange={(e) => setBookOutbound(e.target.checked)}
                           className="w-5 h-5 text-amber-600 rounded border-stone-300 focus:ring-amber-500"
                         />
-                        <span>🚙 預約【去程】({bookingOffer.outboundTime})</span>
+                        <span>🚙 {t.bookOutboundCheck} ({bookingOffer.outboundTime})</span>
                       </label>
                       <span className="text-xs md:text-sm font-bold text-amber-900">
-                        剩 {bookingOffer.outboundAvailableSeats} 位
+                        {t.seatsCountRemaining.replace('{avail}', String(bookingOffer.outboundAvailableSeats)).replace('{total}', String(bookingOffer.outboundTotalSeats))}
                       </span>
                     </div>
 
                     {bookOutbound && (
                       <div className="mt-2.5 pl-7 flex flex-wrap items-center gap-3 text-xs md:text-sm">
-                        <span className="text-stone-600 font-bold">您的身份：</span>
+                        <span className="text-stone-600 font-bold">{t.yourRoleLabel}</span>
                         <label className="flex items-center gap-1.5 cursor-pointer">
                           <input
                             type="radio"
@@ -920,7 +940,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                             onChange={() => setOutboundRole('volunteer')}
                             className="w-4 h-4 text-amber-600"
                           />
-                          <span className="text-orange-900 font-bold">義工組（早到服務）</span>
+                          <span className="text-orange-900 font-bold">{t.roleVolunteerEarly}</span>
                         </label>
                         <label className="flex items-center gap-1.5 cursor-pointer">
                           <input
@@ -930,7 +950,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                             onChange={() => setOutboundRole('attendee')}
                             className="w-4 h-4 text-amber-600"
                           />
-                          <span className="text-emerald-900 font-bold">正行組（活動參加者）</span>
+                          <span className="text-emerald-900 font-bold">{t.roleAttendeeRegular}</span>
                         </label>
                       </div>
                     )}
@@ -953,16 +973,16 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                           onChange={(e) => setBookReturn(e.target.checked)}
                           className="w-5 h-5 text-amber-600 rounded border-stone-300 focus:ring-amber-500"
                         />
-                        <span>🚗 預約【回程】({bookingOffer.returnTime})</span>
+                        <span>🚗 {t.bookReturnCheck} ({bookingOffer.returnTime})</span>
                       </label>
                       <span className="text-xs md:text-sm font-bold text-emerald-900">
-                        剩 {bookingOffer.returnAvailableSeats} 位
+                        {t.seatsCountRemaining.replace('{avail}', String(bookingOffer.returnAvailableSeats)).replace('{total}', String(bookingOffer.returnTotalSeats))}
                       </span>
                     </div>
 
                     {bookReturn && (
                       <div className="mt-2.5 pl-7 flex flex-wrap items-center gap-3 text-xs md:text-sm">
-                        <span className="text-stone-600 font-bold">您的身份：</span>
+                        <span className="text-stone-600 font-bold">{t.yourRoleLabel}</span>
                         <label className="flex items-center gap-1.5 cursor-pointer">
                           <input
                             type="radio"
@@ -971,7 +991,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                             onChange={() => setReturnRole('attendee')}
                             className="w-4 h-4 text-amber-600"
                           />
-                          <span className="text-emerald-900 font-bold">正行組（活動結束回）</span>
+                          <span className="text-emerald-900 font-bold">{t.roleAttendeeReturn}</span>
                         </label>
                         <label className="flex items-center gap-1.5 cursor-pointer">
                           <input
@@ -981,7 +1001,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                             onChange={() => setReturnRole('volunteer')}
                             className="w-4 h-4 text-amber-600"
                           />
-                          <span className="text-orange-900 font-bold">義工組（善後完畢回）</span>
+                          <span className="text-orange-900 font-bold">{t.roleVolunteerReturn}</span>
                         </label>
                       </div>
                     )}
@@ -993,12 +1013,12 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-stone-800 font-bold mb-1.5 text-xs md:text-sm">
-                    乘客姓名 <span className="text-red-500">*</span>
+                    {t.modalNameLabel} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="例：陳先生 或 張女士"
+                    placeholder={t.passengerNamePlaceholder}
                     value={passengerName}
                     onChange={(e) => setPassengerName(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1007,12 +1027,12 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1.5 text-xs md:text-sm">
-                    聯絡電話 <span className="text-red-500">*</span>
+                    {t.modalPhoneLabel} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
                     required
-                    placeholder="例：917-123-4567"
+                    placeholder={t.phonePlaceholder}
                     value={passengerPhone}
                     onChange={(e) => setPassengerPhone(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1023,11 +1043,11 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-stone-800 font-bold mb-1.5 text-xs md:text-sm">
-                    微信 WeChat ID 或 LINE (選填)
+                    {t.modalContactLabel}
                   </label>
                   <input
                     type="text"
-                    placeholder="例：chen_ny88"
+                    placeholder={t.whatsappPlaceholder}
                     value={wechatOrLine}
                     onChange={(e) => setWechatOrLine(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1036,7 +1056,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1.5 text-xs md:text-sm">
-                    搭乘人數 (含本人) <span className="text-red-500">*</span>
+                    {t.modalCountLabel} <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={seatCount}
@@ -1045,7 +1065,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                   >
                     {[1, 2, 3, 4].map((n) => (
                       <option key={n} value={n}>
-                        {n} 位
+                        {n} {t.personCountSuffix}
                       </option>
                     ))}
                   </select>
@@ -1054,11 +1074,11 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
               <div>
                 <label className="block text-stone-800 font-bold mb-1.5 text-xs md:text-sm">
-                  備註說明 (選填)
+                  {t.modalNotesLabel}
                 </label>
                 <input
                   type="text"
-                  placeholder="例：有年長長輩隨行、攜帶隨身行李、可在鄰近路口等候..."
+                  placeholder={t.modalNotesPlaceholder}
                   value={pickupNote}
                   onChange={(e) => setPickupNote(e.target.value)}
                   className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1071,13 +1091,13 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                   onClick={() => setBookingOffer(null)}
                   className="flex-1 py-3.5 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
                 >
-                  取消
+                  {t.modalCancelBtn}
                 </button>
                 <button
                   type="submit"
                   className="flex-1 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
                 >
-                  確認預約此車
+                  {t.modalConfirmBtn}
                 </button>
               </div>
             </form>
@@ -1094,19 +1114,19 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             </div>
 
             <div>
-              <h3 className="text-2xl font-black text-stone-900">車位預約成功！</h3>
+              <h3 className="text-2xl font-black text-stone-900">{t.bookingConfirmedTitle}</h3>
               <p className="text-xs md:text-sm text-stone-500 mt-1 font-medium">
-                已為您保留座位，請記錄車主聯繫資訊
+                {t.bookingConfirmedDesc}
               </p>
             </div>
 
             <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 text-left space-y-2.5 text-xs md:text-sm">
               <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                <span className="text-stone-600 font-medium">車主姓名</span>
+                <span className="text-stone-600 font-medium">{t.carOwner}</span>
                 <span className="font-black text-stone-900 text-base">{bookingSuccessInfo.driverName}</span>
               </div>
               <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                <span className="text-stone-600 font-medium">車主電話</span>
+                <span className="text-stone-600 font-medium">{t.driverPhoneLabel}</span>
                 <a
                   href={`tel:${bookingSuccessInfo.driverPhone}`}
                   className="font-black text-amber-800 text-base flex items-center gap-1 underline"
@@ -1117,16 +1137,16 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               </div>
               {bookingSuccessInfo.wechatOrLine && (
                 <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                  <span className="text-stone-600 font-medium">微信/LINE</span>
+                  <span className="text-stone-600 font-medium">WhatsApp</span>
                   <span className="font-bold text-stone-800">{bookingSuccessInfo.wechatOrLine}</span>
                 </div>
               )}
               <div className="flex items-start justify-between border-b border-amber-200 pb-2">
-                <span className="text-stone-600 font-medium shrink-0">集合地點</span>
+                <span className="text-stone-600 font-medium shrink-0">{t.pickupPointLabel}</span>
                 <span className="font-bold text-stone-900 text-right">{bookingSuccessInfo.pickupPoint}</span>
               </div>
               <div className="pt-1 text-stone-800 font-semibold leading-relaxed">
-                <strong>行程明細：</strong>{bookingSuccessInfo.details}
+                <strong>{t.tripDetails}：</strong>{bookingSuccessInfo.details}
               </div>
             </div>
 
@@ -1134,7 +1154,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               onClick={() => setBookingSuccessInfo(null)}
               className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
             >
-              我知道了，感謝車主協助
+              {t.acknowledgedBtn}
             </button>
           </div>
         </div>
@@ -1147,10 +1167,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-black text-stone-900">
-                  登記搭乘需求（無車位協調）
+                  {t.requestFormTitle}
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-                  若無順路車輛，填寫後報名報到組或順路車主將為您協助安排
+                  {t.requestFormDesc}
                 </p>
               </div>
               <button
@@ -1164,21 +1184,23 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             {requestSubmitted ? (
               <div className="py-8 text-center space-y-3">
                 <CheckCircle2 className="w-14 h-14 text-emerald-600 mx-auto" />
-                <h4 className="text-xl font-bold text-stone-900">登記成功！</h4>
+                <h4 className="text-xl font-bold text-stone-900">{t.requestSuccess}</h4>
                 <p className="text-xs md:text-sm text-stone-600">
-                  您的需求已送至空山寺報名報到組，一旦有相應車次將主動聯繫您。
+                  {language === 'en'
+                    ? 'Your request has been forwarded to the registration team. We will contact you once a matching ride is available.'
+                    : '您的需求已送至空山寺報名報到組，一旦有相應車次將主動聯繫您。'}
                 </p>
               </div>
             ) : (
               <form onSubmit={handleSubmitRequest} className="space-y-4 text-xs md:text-sm">
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    乘客姓名 <span className="text-red-500">*</span>
+                    {t.requestNameLabel} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="例：王先生 或 李女士"
+                    placeholder={t.passengerNamePlaceholder}
                     value={reqName}
                     onChange={(e) => setReqName(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1188,12 +1210,12 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                      聯絡電話 <span className="text-red-500">*</span>
+                      {t.requestPhoneLabel} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="tel"
                       required
-                      placeholder="例：917-000-1111"
+                      placeholder={t.phonePlaceholder}
                       value={reqPhone}
                       onChange={(e) => setReqPhone(e.target.value)}
                       className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1202,11 +1224,11 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
                   <div>
                     <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                      微信 WeChat (選填)
+                      {t.requestContactLabel}
                     </label>
                     <input
                       type="text"
-                      placeholder="微信 ID"
+                      placeholder={t.whatsappPlaceholder}
                       value={reqWechat}
                       onChange={(e) => setReqWechat(e.target.value)}
                       className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1217,7 +1239,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                      希望上車區域 <span className="text-red-500">*</span>
+                      {t.requestAreaLabel} <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={reqArea}
@@ -1226,7 +1248,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     >
                       {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
                         <option key={a} value={a}>
-                          {a}
+                          {getLocalizedArea(a, language)}
                         </option>
                       ))}
                     </select>
@@ -1234,7 +1256,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
                   <div>
                     <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                      需求人數 <span className="text-red-500">*</span>
+                      {t.requestCountLabel} <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={reqCount}
@@ -1243,7 +1265,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     >
                       {[1, 2, 3, 4].map((n) => (
                         <option key={n} value={n}>
-                          {n} 位
+                          {n} {t.personCountSuffix}
                         </option>
                       ))}
                     </select>
@@ -1252,11 +1274,11 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    希望上車地點
+                    {t.requestPointLabel}
                   </label>
                   <input
                     type="text"
-                    placeholder="例：緬街圖書館門口、八大道地鐵站出口..."
+                    placeholder={t.requestPointPlaceholder}
                     value={reqPoint}
                     onChange={(e) => setReqPoint(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1273,7 +1295,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setReqNeedOutbound(e.target.checked)}
                         className="w-5 h-5 text-amber-600 rounded border-stone-300"
                       />
-                      <span>需要【去程】車位</span>
+                      <span>{t.requestOutboundCheck}</span>
                     </label>
 
                     {reqNeedOutbound && (
@@ -1282,8 +1304,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setReqOutboundRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="volunteer">義工身份（早到服務）</option>
-                        <option value="attendee">正行身份（參加活動）</option>
+                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
+                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
                       </select>
                     )}
                   </div>
@@ -1297,7 +1319,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setReqNeedReturn(e.target.checked)}
                         className="w-5 h-5 text-amber-600 rounded border-stone-300"
                       />
-                      <span>需要【回程】車位</span>
+                      <span>{t.requestReturnCheck}</span>
                     </label>
 
                     {reqNeedReturn && (
@@ -1306,8 +1328,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setReqReturnRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="attendee">正行身份（活動結束回）</option>
-                        <option value="volunteer">義工身份（善後完畢回）</option>
+                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
+                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
                       </select>
                     )}
                   </div>
@@ -1315,11 +1337,11 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    備註說明
+                    {t.requestNotesLabel}
                   </label>
                   <input
                     type="text"
-                    placeholder="例：有長輩隨行、時間彈性可配合車主..."
+                    placeholder={t.requestNotesPlaceholder}
                     value={reqNotes}
                     onChange={(e) => setReqNotes(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1332,13 +1354,13 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     onClick={() => setIsRequestModalOpen(false)}
                     className="flex-1 py-3.5 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
                   >
-                    取消
+                    {t.modalCancelBtn}
                   </button>
                   <button
                     type="submit"
                     className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
                   >
-                    送出需求登記
+                    {t.requestSubmitBtn}
                   </button>
                 </div>
               </form>
@@ -1358,7 +1380,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                   {t.editRequestModalTitle}
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-                  可隨時修改上車地點、人數或去回程需求
+                  {language === 'en' ? 'Update your pickup location, passenger count, or trips at any time' : '可隨時修改上車地點、人數或去回程需求'}
                 </p>
               </div>
               <button
@@ -1428,7 +1450,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     >
                       {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
                         <option key={a} value={a}>
-                          {a}
+                          {getLocalizedArea(a, language)}
                         </option>
                       ))}
                     </select>
@@ -1445,7 +1467,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     >
                       {[1, 2, 3, 4].map((n) => (
                         <option key={n} value={n}>
-                          {n} 位
+                          {n} {t.personCountSuffix}
                         </option>
                       ))}
                     </select>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Car, Users, ClipboardCheck, RotateCcw, MapPin, Calendar, Globe } from 'lucide-react';
 import type { Event } from '../types';
+import { getLocalizedEvent } from '../data/mockData';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { Language } from '../i18n/types';
 
@@ -76,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Logo & Title */}
           <div className="flex items-center gap-3">
             <div className="w-13 h-13 rounded-2xl bg-black border border-stone-800 text-white flex items-center justify-center shadow-xs shrink-0 overflow-hidden p-1">
-              <img src="/kongshan_logo.png" alt="空山寺" className="w-full h-full object-contain" />
+              <img src="./kongshan_logo.png" alt="空山寺" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -103,11 +104,15 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label={t.selectEvent}
               className="bg-transparent text-xs md:text-sm font-bold text-stone-800 focus:outline-hidden cursor-pointer w-full md:w-auto pr-2"
             >
-              {events.map((evt) => (
-                <option key={evt.id} value={evt.id}>
-                  {evt.title} ({evt.date.split('（')[0]})
-                </option>
-              ))}
+              {events.map((evt) => {
+                const loc = getLocalizedEvent(evt, language);
+                const displayDate = loc.date.includes('（') ? loc.date.split('（')[0] : loc.date.split('(')[0];
+                return (
+                  <option key={evt.id} value={evt.id}>
+                    {loc.title} ({displayDate.trim()})
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>

@@ -1,17 +1,20 @@
 export type Language = 'zh-TW' | 'zh-CN' | 'en';
 
 export interface TranslationDictionary {
-  // Common / Navbar
+  // Common / Navbar / Footer
   appTitle: string;
   appSubtitle: string;
   subRegionTag: string;
   templeAddress: string;
   resetDemoData: string;
+  resetConfirmPrompt: string;
   tabPassenger: string;
   tabDriver: string;
   tabAdmin: string;
   selectEvent: string;
   topBanner: string;
+  footerTagline: string;
+  footerSlogan: string;
 
   // Roles
   roleVolunteer: string;
@@ -20,25 +23,24 @@ export interface TranslationDictionary {
   roleAttendeeDesc: string;
   roleBoth: string;
 
-  // Legs
+  // Legs & Filters
   outbound: string;
   returnLeg: string;
   bothLegs: string;
   outboundTimeLabel: string;
   returnTimeLabel: string;
+  filterAllLegs: string;
+  filterOutboundLeg: string;
+  filterReturnLeg: string;
+  filterRoleTypeLabel: string;
+  filterRoleAll: string;
+  filterRoleVolunteer: string;
+  filterRoleAttendee: string;
+  searchPlaceholder: string;
 
-  // Areas
-  areas: {
-    flushing: string;
-    chinatown: string;
-    brooklyn: string;
-    queensOther: string;
-    longIsland: string;
-    newJersey: string;
-    westchester: string;
-    connecticut: string;
-    other: string;
-  };
+  // Decoupled Tip / Banner
+  decoupledTipTitle: string;
+  decoupledTipContent: string;
 
   // Passenger View
   passengerTitle: string;
@@ -56,12 +58,34 @@ export interface TranslationDictionary {
   seatsRemaining: string;
   seatsTotal: string;
   departureTime: string;
+  returnDepartureTime: string;
   bookSeatBtn: string;
   carOwner: string;
+  carOwnerPhone: string;
+  pickupPointLabel: string;
   noCarsFound: string;
   submitRequestPrompt: string;
   bookingSuccess: string;
   requestSuccess: string;
+  activeCarsListTitle: string;
+  carCountBadge: string;
+  flexibleLegChoice: string;
+  emptyCarsTitle: string;
+  emptyCarsDesc: string;
+  registerMyRequestBtn: string;
+  registerNewRequestBtn: string;
+  toTemple: string;
+  returningToArea: string;
+  volunteerEarlyBadge: string;
+  attendeeRegularBadge: string;
+  volunteerAfterCleanup: string;
+  attendeeAfterProgram: string;
+  fullSeats: string;
+  allLegsFull: string;
+  bookThisRideBtn: string;
+  seatsCountRemaining: string;
+  personCountSuffix: string;
+  seatCountSuffix: string;
 
   // Booking Modal
   modalBookingTitle: string;
@@ -76,8 +100,23 @@ export interface TranslationDictionary {
   modalCancelBtn: string;
   modalConfirmBtn: string;
   modalSelectLegWarning: string;
+  selectLegPrompt: string;
+  bookOutboundCheck: string;
+  bookReturnCheck: string;
+  yourRoleLabel: string;
+  roleVolunteerEarly: string;
+  roleAttendeeRegular: string;
+  roleAttendeeReturn: string;
+  roleVolunteerReturn: string;
+  passengerNamePlaceholder: string;
+  phonePlaceholder: string;
+  whatsappPlaceholder: string;
+  bookingConfirmedTitle: string;
+  bookingConfirmedDesc: string;
+  acknowledgedBtn: string;
+  tripDetails: string;
 
-  // Request Form
+  // Request Form & Modal
   requestFormTitle: string;
   requestFormDesc: string;
   requestNameLabel: string;
@@ -91,6 +130,14 @@ export interface TranslationDictionary {
   requestOutboundCheck: string;
   requestReturnCheck: string;
   requestSubmitBtn: string;
+  requestNotesLabel: string;
+  requestNotesPlaceholder: string;
+  requestDefaultPickupPoint: string;
+  statusMatchedFull: string;
+  statusMatchedPartial: string;
+  statusPending: string;
+  needLabel: string;
+  notNeedLabel: string;
 
   // Driver View
   driverTitle: string;
@@ -123,6 +170,30 @@ export interface TranslationDictionary {
   claimSuccess: string;
   noWaitingPassengers: string;
   claimPassengerBtn: string;
+  driverHeroTitle: string;
+  driverHeroDesc: string;
+  driverFormHeader: string;
+  driverFormEventDate: string;
+  driverNamePlaceholder: string;
+  driverPhonePlaceholder: string;
+  driverWhatsappPlaceholder: string;
+  driverPointPlaceholderFull: string;
+  driverOutboundOptionVol: string;
+  driverOutboundOptionAtt: string;
+  driverOutboundOptionBoth: string;
+  driverReturnOptionAtt: string;
+  driverReturnOptionVol: string;
+  driverReturnOptionBoth: string;
+  driverOutboundDepartureLabel: string;
+  driverReturnDepartureLabel: string;
+  driverEmptySeatsSuffix: string;
+  driverCarModelPlaceholder: string;
+  driverCarColorPlaceholder: string;
+  driverPlatePlaceholder: string;
+  driverNotesPlaceholder: string;
+  deleteOfferConfirm: string;
+  noMyCarsTitle: string;
+  noMyCarsDesc: string;
 
   // Admin View
   adminTitle: string;
@@ -166,4 +237,12 @@ export interface TranslationDictionary {
   updateSuccess: string;
   cancelRequestBtn: string;
   cancelRequestConfirm: string;
+  deleteOfferBtn: string;
+  deleteRequestBtn: string;
+  deleteRequestConfirm: string;
+  ejectPassengerBtn: string;
+  ejectPassengerConfirm: string;
+  ejectedBadge: string;
+  ejectedNotice: string;
+  ejectedReasonPrefix: string;
 }

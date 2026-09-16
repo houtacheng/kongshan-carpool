@@ -88,4 +88,9 @@ export interface RideRequest {
   matchedOutboundOfferId?: string;
   matchedReturnOfferId?: string;
   createdAt: string;
+
+  // Ejected tracking (due to vehicle deletion or modification)
+  isEjected?: boolean;
+  ejectedReason?: string;
+  ejectedAt?: string;
 }
