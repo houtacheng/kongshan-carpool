@@ -990,8 +990,8 @@ export const DriverView: React.FC<DriverViewProps> = ({
                           onChange={(e) => setEditOutboundMode(e.target.value as any)}
                           className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs font-bold"
                         >
-                          <option value="volunteer">{t.roleVolunteer}</option>
-                          <option value="attendee">{t.roleAttendee}</option>
+                          <option value="volunteer">{t.roleVolunteerEarly}</option>
+                          <option value="attendee">{t.roleAttendeeRegular}</option>
                           <option value="both">{t.roleBoth}</option>
                         </select>
                       </div>
@@ -1040,8 +1040,8 @@ export const DriverView: React.FC<DriverViewProps> = ({
                           onChange={(e) => setEditReturnMode(e.target.value as any)}
                           className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs font-bold"
                         >
-                          <option value="volunteer">{t.roleVolunteer}</option>
-                          <option value="attendee">{t.roleAttendee}</option>
+                          <option value="volunteer">{t.roleVolunteerReturn}</option>
+                          <option value="attendee">{t.roleAttendeeReturn}</option>
                           <option value="both">{t.roleBoth}</option>
                         </select>
                       </div>

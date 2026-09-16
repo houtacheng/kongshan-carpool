@@ -52,9 +52,9 @@ export const translations: Record<Language, TranslationDictionary> = {
     footerSlogan: '共乘互助同行 • 彼此照應 • 圓滿順利',
 
     roleVolunteer: '義工',
-    roleVolunteerDesc: '提早到寺協助備餐/佈置',
+    roleVolunteerDesc: '提早到寺協助出坡/備餐',
     roleAttendee: '正行',
-    roleAttendeeDesc: '依中秋普茶行程準時出席',
+    roleAttendeeDesc: '依活動法會行程準時出席',
     roleBoth: '義工或正行皆可',
 
     outbound: '去程',
@@ -342,9 +342,9 @@ export const translations: Record<Language, TranslationDictionary> = {
     footerSlogan: '共乘互助同行 • 彼此照应 • 圆满顺利',
 
     roleVolunteer: '义工',
-    roleVolunteerDesc: '提早到寺协助备餐/布置',
+    roleVolunteerDesc: '提早到寺协助出坡/备餐',
     roleAttendee: '正行',
-    roleAttendeeDesc: '依中秋普茶行程准时出席',
+    roleAttendeeDesc: '依活动法会行程准时出席',
     roleBoth: '义工或正行皆可',
 
     outbound: '去程',
@@ -632,9 +632,9 @@ export const translations: Record<Language, TranslationDictionary> = {
     footerSlogan: 'Safe Travel Together • Caring for Each Other • Joyful Gathering',
 
     roleVolunteer: 'Volunteer',
-    roleVolunteerDesc: 'Arrive early for setup & meal prep',
+    roleVolunteerDesc: 'Arrive early for temple service & setup',
     roleAttendee: 'Attendee',
-    roleAttendeeDesc: 'Arrive on schedule for the tea gathering',
+    roleAttendeeDesc: 'Arrive on schedule for the event',
     roleBoth: 'Open to both roles',
 
     outbound: 'Outbound',

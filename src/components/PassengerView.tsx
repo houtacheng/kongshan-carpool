@@ -1315,8 +1315,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         }}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="volunteer">{t.roleVolunteer}</option>
-                        <option value="attendee">{t.roleAttendee}</option>
+                        <option value="volunteer">{t.roleVolunteerEarly}</option>
+                        <option value="attendee">{t.roleAttendeeRegular}</option>
                       </select>
                     )}
                   </div>
@@ -1339,8 +1339,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setReqReturnRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="volunteer">{t.roleVolunteer}</option>
-                        <option value="attendee">{t.roleAttendee}</option>
+                        <option value="volunteer">{t.roleVolunteerReturn}</option>
+                        <option value="attendee">{t.roleAttendeeReturn}</option>
                       </select>
                     )}
                   </div>
@@ -1516,8 +1516,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setEditReqOutboundRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="volunteer">{t.roleVolunteer}</option>
-                        <option value="attendee">{t.roleAttendee}</option>
+                        <option value="volunteer">{t.roleVolunteerEarly}</option>
+                        <option value="attendee">{t.roleAttendeeRegular}</option>
                       </select>
                     )}
                   </div>
@@ -1540,8 +1540,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setEditReqReturnRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="volunteer">{t.roleVolunteer}</option>
-                        <option value="attendee">{t.roleAttendee}</option>
+                        <option value="volunteer">{t.roleVolunteerReturn}</option>
+                        <option value="attendee">{t.roleAttendeeReturn}</option>
                       </select>
                     )}
                   </div>
