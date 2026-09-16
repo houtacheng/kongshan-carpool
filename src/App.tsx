@@ -6,9 +6,9 @@ import { PassengerView } from './components/PassengerView';
 import { DriverView } from './components/DriverView';
 import { AdminView } from './components/AdminView';
 import { MapPin } from 'lucide-react';
+import { LanguageProvider } from './i18n/LanguageContext';
 
-
-export function App() {
+function AppContent() {
   const [events] = useState<Event[]>(INITIAL_EVENTS);
   const [selectedEventId, setSelectedEventId] = useState<string>(INITIAL_EVENTS[0].id);
   const [currentTab, setCurrentTab] = useState<'passenger' | 'driver' | 'admin'>('passenger');
@@ -237,6 +237,21 @@ export function App() {
     return true;
   };
 
+  // Action: Update an existing carpool offer
+  const handleUpdateOffer = (updatedOffer: CarpoolOffer) => {
+    setOffers((prev) => prev.map((o) => (o.id === updatedOffer.id ? updatedOffer : o)));
+  };
+
+  // Action: Update a ride request
+  const handleUpdateRequest = (updatedRequest: RideRequest) => {
+    setRequests((prev) => prev.map((r) => (r.id === updatedRequest.id ? updatedRequest : r)));
+  };
+
+  // Action: Cancel a ride request
+  const handleCancelRequest = (requestId: string) => {
+    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+  };
+
   // Reset to initial mock data
   const handleResetData = () => {
     if (confirm('確定要還原空山寺中秋法會的展示資料為初始狀態嗎？')) {
@@ -267,6 +282,8 @@ export function App() {
               requests={requests}
               onBookSeat={handleBookSeat}
               onCreateRequest={handleCreateRequest}
+              onUpdateRequest={handleUpdateRequest}
+              onCancelRequest={handleCancelRequest}
             />
           )}
 
@@ -277,6 +294,7 @@ export function App() {
               requests={requests}
               onCreateOffer={handleCreateOffer}
               onDeleteOffer={handleDeleteOffer}
+              onUpdateOffer={handleUpdateOffer}
               onMatchRequestToOffer={handleMatchRequestToOffer}
             />
           )}
@@ -289,6 +307,9 @@ export function App() {
               onMatchRequestToOffer={handleMatchRequestToOffer}
               onCreateOffer={handleCreateOffer}
               onCreateRequest={handleCreateRequest}
+              onUpdateOffer={handleUpdateOffer}
+              onUpdateRequest={handleUpdateRequest}
+              onCancelRequest={handleCancelRequest}
             />
           )}
         </main>
@@ -308,6 +329,14 @@ export function App() {
         </p>
       </footer>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 }
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Event, CarpoolOffer, RideRequest, ParticipantRole } from '../types';
 import { EAST_COAST_AREAS } from '../data/mockData';
+import { useLanguage } from '../i18n/LanguageContext';
 import {
   Car,
   CheckCircle2,
@@ -16,7 +17,9 @@ import {
   Sparkles,
   Wand2,
   ThumbsUp,
-  KeyRound
+  KeyRound,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 
 interface AdminViewProps {
@@ -26,6 +29,9 @@ interface AdminViewProps {
   onMatchRequestToOffer: (requestId: string, offerId: string, leg: 'outbound' | 'return' | 'both') => boolean;
   onCreateOffer: (offer: Omit<CarpoolOffer, 'id' | 'createdAt' | 'outboundPassengers' | 'returnPassengers'>) => void;
   onCreateRequest: (request: Omit<RideRequest, 'id' | 'createdAt' | 'status'>) => void;
+  onUpdateOffer?: (offer: CarpoolOffer) => void;
+  onUpdateRequest?: (request: RideRequest) => void;
+  onCancelRequest?: (requestId: string) => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
@@ -35,7 +41,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onMatchRequestToOffer,
   onCreateOffer,
   onCreateRequest,
+  onUpdateOffer,
+  onUpdateRequest,
+  onCancelRequest,
 }) => {
+  const { t } = useLanguage();
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return localStorage.getItem('kongshan_checkin_auth') === 'true';
@@ -64,6 +74,122 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [elderlyOutboundRole, setElderlyOutboundRole] = useState<ParticipantRole>('volunteer');
   const [elderlyReturnRole, setElderlyReturnRole] = useState<ParticipantRole>('attendee');
   const [elderlyNotes, setElderlyNotes] = useState('');
+
+  // Admin Editing Request State
+  const [adminEditingRequest, setAdminEditingRequest] = useState<RideRequest | null>(null);
+  const [adminEditReqName, setAdminEditReqName] = useState('');
+  const [adminEditReqPhone, setAdminEditReqPhone] = useState('');
+  const [adminEditReqWechat, setAdminEditReqWechat] = useState('');
+  const [adminEditReqArea, setAdminEditReqArea] = useState('');
+  const [adminEditReqPoint, setAdminEditReqPoint] = useState('');
+  const [adminEditReqCount, setAdminEditReqCount] = useState(1);
+  const [adminEditReqNeedOutbound, setAdminEditReqNeedOutbound] = useState(true);
+  const [adminEditReqOutboundRole, setAdminEditReqOutboundRole] = useState<ParticipantRole>('volunteer');
+  const [adminEditReqNeedReturn, setAdminEditReqNeedReturn] = useState(true);
+  const [adminEditReqReturnRole, setAdminEditReqReturnRole] = useState<ParticipantRole>('attendee');
+  const [adminEditReqNotes, setAdminEditReqNotes] = useState('');
+
+  const handleOpenAdminEditRequest = (req: RideRequest) => {
+    setAdminEditingRequest(req);
+    setAdminEditReqName(req.passengerName);
+    setAdminEditReqPhone(req.passengerPhone);
+    setAdminEditReqWechat(req.wechatOrLine || '');
+    setAdminEditReqArea(req.pickupArea);
+    setAdminEditReqPoint(req.pickupPoint);
+    setAdminEditReqCount(req.passengerCount);
+    setAdminEditReqNeedOutbound(req.needOutbound);
+    setAdminEditReqOutboundRole(req.outboundRole);
+    setAdminEditReqNeedReturn(req.needReturn);
+    setAdminEditReqReturnRole(req.returnRole);
+    setAdminEditReqNotes(req.notes || '');
+  };
+
+  const handleSaveAdminEditRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminEditingRequest || !onUpdateRequest) return;
+    const updated: RideRequest = {
+      ...adminEditingRequest,
+      passengerName: adminEditReqName.trim(),
+      passengerPhone: adminEditReqPhone.trim(),
+      wechatOrLine: adminEditReqWechat.trim(),
+      pickupArea: adminEditReqArea,
+      pickupPoint: adminEditReqPoint.trim(),
+      passengerCount: adminEditReqCount,
+      needOutbound: adminEditReqNeedOutbound,
+      outboundRole: adminEditReqOutboundRole,
+      needReturn: adminEditReqNeedReturn,
+      returnRole: adminEditReqReturnRole,
+      notes: adminEditReqNotes.trim()
+    };
+    onUpdateRequest(updated);
+    setAdminEditingRequest(null);
+  };
+
+  // Admin Editing Offer State
+  const [adminEditingOffer, setAdminEditingOffer] = useState<CarpoolOffer | null>(null);
+  const [adminEditDriverName, setAdminEditDriverName] = useState('');
+  const [adminEditDriverPhone, setAdminEditDriverPhone] = useState('');
+  const [adminEditDriverWechat, setAdminEditDriverWechat] = useState('');
+  const [adminEditDriverArea, setAdminEditDriverArea] = useState('');
+  const [adminEditDriverPoint, setAdminEditDriverPoint] = useState('');
+  const [adminEditCarModel, setAdminEditCarModel] = useState('');
+  const [adminEditCarColor, setAdminEditCarColor] = useState('');
+  const [adminEditPlateNumber, setAdminEditPlateNumber] = useState('');
+  const [adminEditNotes, setAdminEditNotes] = useState('');
+  const [adminEditHasOutbound, setAdminEditHasOutbound] = useState(true);
+  const [adminEditOutboundTime, setAdminEditOutboundTime] = useState('');
+  const [adminEditOutboundTotalSeats, setAdminEditOutboundTotalSeats] = useState(4);
+  const [adminEditHasReturn, setAdminEditHasReturn] = useState(true);
+  const [adminEditReturnTime, setAdminEditReturnTime] = useState('');
+  const [adminEditReturnTotalSeats, setAdminEditReturnTotalSeats] = useState(4);
+
+  const handleOpenAdminEditOffer = (offer: CarpoolOffer) => {
+    setAdminEditingOffer(offer);
+    setAdminEditDriverName(offer.driverName);
+    setAdminEditDriverPhone(offer.driverPhone);
+    setAdminEditDriverWechat(offer.wechatOrLine || '');
+    setAdminEditDriverArea(offer.departureArea);
+    setAdminEditDriverPoint(offer.departurePoint);
+    setAdminEditCarModel(offer.carModel);
+    setAdminEditCarColor(offer.carColor || '');
+    setAdminEditPlateNumber(offer.plateNumber || '');
+    setAdminEditNotes(offer.notes || '');
+    setAdminEditHasOutbound(offer.hasOutbound);
+    setAdminEditOutboundTime(offer.outboundTime);
+    setAdminEditOutboundTotalSeats(offer.outboundTotalSeats);
+    setAdminEditHasReturn(offer.hasReturn);
+    setAdminEditReturnTime(offer.returnTime);
+    setAdminEditReturnTotalSeats(offer.returnTotalSeats);
+  };
+
+  const handleSaveAdminEditOffer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminEditingOffer || !onUpdateOffer) return;
+    const outPassCount = adminEditingOffer.outboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+    const retPassCount = adminEditingOffer.returnPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+    const updated: CarpoolOffer = {
+      ...adminEditingOffer,
+      driverName: adminEditDriverName.trim(),
+      driverPhone: adminEditDriverPhone.trim(),
+      wechatOrLine: adminEditDriverWechat.trim(),
+      departureArea: adminEditDriverArea,
+      departurePoint: adminEditDriverPoint.trim(),
+      carModel: adminEditCarModel.trim(),
+      carColor: adminEditCarColor.trim(),
+      plateNumber: adminEditPlateNumber.trim(),
+      notes: adminEditNotes.trim(),
+      hasOutbound: adminEditHasOutbound,
+      outboundTime: adminEditOutboundTime.trim(),
+      outboundTotalSeats: adminEditOutboundTotalSeats,
+      outboundAvailableSeats: Math.max(0, adminEditOutboundTotalSeats - outPassCount),
+      hasReturn: adminEditHasReturn,
+      returnTime: adminEditReturnTime.trim(),
+      returnTotalSeats: adminEditReturnTotalSeats,
+      returnAvailableSeats: Math.max(0, adminEditReturnTotalSeats - retPassCount)
+    };
+    onUpdateOffer(updated);
+    setAdminEditingOffer(null);
+  };
 
   // Stats calculation
   const totalCars = currentOffers.length;
@@ -679,17 +805,40 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 >
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="font-black text-base md:text-lg text-stone-900">
-                          {req.passengerName}
-                        </span>
-                        <span className="px-2.5 py-0.5 rounded bg-orange-100 text-orange-900 font-bold text-xs">
-                          需求 {req.passengerCount} 位
-                        </span>
-                        <span className="text-stone-500 font-medium">電話：{req.passengerPhone}</span>
-                        {req.wechatOrLine && (
-                          <span className="text-stone-400">微信：{req.wechatOrLine}</span>
-                        )}
+                      <div className="flex items-center justify-between gap-2.5 flex-wrap">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="font-black text-base md:text-lg text-stone-900">
+                            {req.passengerName}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded bg-orange-100 text-orange-900 font-bold text-xs">
+                            需求 {req.passengerCount} 位
+                          </span>
+                          <span className="text-stone-500 font-medium">電話：{req.passengerPhone}</span>
+                          {req.wechatOrLine && (
+                            <span className="text-stone-500 font-medium">WhatsApp：{req.wechatOrLine}</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenAdminEditRequest(req)}
+                            className="px-2.5 py-1 text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                            <span>{t.editRequestBtn}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(t.cancelRequestConfirm)) {
+                                onCancelRequest?.(req.id);
+                              }
+                            }}
+                            className="px-2.5 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>{t.cancelRequestBtn}</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="text-stone-700 flex items-center gap-1 font-medium">
@@ -831,7 +980,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     {offer.driverPhone}
                   </a>
                   {offer.wechatOrLine && (
-                    <span className="text-stone-500">微信: {offer.wechatOrLine}</span>
+                    <span className="text-stone-500 font-medium">WhatsApp: {offer.wechatOrLine}</span>
                   )}
                   <span className="text-stone-300">|</span>
                   <span className="text-stone-600 font-medium">
@@ -839,10 +988,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-3 py-1 rounded-lg bg-white border border-stone-200 text-stone-800 font-bold">
                     📍 {offer.departureArea} ({offer.departurePoint})
                   </span>
+                  <button
+                    onClick={() => handleOpenAdminEditOffer(offer)}
+                    className="px-2.5 py-1 text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                    <span>{t.editOfferBtn}</span>
+                  </button>
                 </div>
               </div>
 
@@ -1015,11 +1171,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                 <div>
                   <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
-                    微信 (選填)
+                    WhatsApp (選填)
                   </label>
                   <input
                     type="text"
-                    placeholder="微信 ID"
+                    placeholder="例：+1 917-xxx-xxxx"
                     value={elderlyWechat}
                     onChange={(e) => setElderlyWechat(e.target.value)}
                     className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -1133,6 +1289,360 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   className="flex-1 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
                 >
                   確認登記
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Edit Request Modal */}
+      {adminEditingRequest && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-100 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in">
+            <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-amber-700" />
+                  修改乘客搭車需求
+                </h3>
+                <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
+                  報名報到組後台管理修訂
+                </p>
+              </div>
+              <button
+                onClick={() => setAdminEditingRequest(null)}
+                className="w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xl font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAdminEditRequest} className="space-y-4 text-xs md:text-sm">
+              <div>
+                <label className="block text-stone-800 font-bold mb-1">乘客姓名 <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={adminEditReqName}
+                  onChange={(e) => setAdminEditReqName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">聯絡電話 <span className="text-red-500">*</span></label>
+                  <input
+                    type="tel"
+                    required
+                    value={adminEditReqPhone}
+                    onChange={(e) => setAdminEditReqPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">WhatsApp</label>
+                  <input
+                    type="text"
+                    value={adminEditReqWechat}
+                    onChange={(e) => setAdminEditReqWechat(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">接送區域</label>
+                  <select
+                    value={adminEditReqArea}
+                    onChange={(e) => setAdminEditReqArea(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl font-bold"
+                  >
+                    {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">需求人數</label>
+                  <select
+                    value={adminEditReqCount}
+                    onChange={(e) => setAdminEditReqCount(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl font-bold"
+                  >
+                    {[1, 2, 3, 4].map((n) => (
+                      <option key={n} value={n}>{n} 位</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-stone-800 font-bold mb-1">具體地點</label>
+                <input
+                  type="text"
+                  value={adminEditReqPoint}
+                  onChange={(e) => setAdminEditReqPoint(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                />
+              </div>
+
+              <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                    <input
+                      type="checkbox"
+                      checked={adminEditReqNeedOutbound}
+                      onChange={(e) => setAdminEditReqNeedOutbound(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded"
+                    />
+                    <span>需要去程</span>
+                  </label>
+                  {adminEditReqNeedOutbound && (
+                    <select
+                      value={adminEditReqOutboundRole}
+                      onChange={(e) => setAdminEditReqOutboundRole(e.target.value as ParticipantRole)}
+                      className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
+                    >
+                      <option value="volunteer">義工 (早到)</option>
+                      <option value="attendee">正行</option>
+                    </select>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-stone-200">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                    <input
+                      type="checkbox"
+                      checked={adminEditReqNeedReturn}
+                      onChange={(e) => setAdminEditReqNeedReturn(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded"
+                    />
+                    <span>需要回程</span>
+                  </label>
+                  {adminEditReqNeedReturn && (
+                    <select
+                      value={adminEditReqReturnRole}
+                      onChange={(e) => setAdminEditReqReturnRole(e.target.value as ParticipantRole)}
+                      className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
+                    >
+                      <option value="attendee">正行 (活動後即回)</option>
+                      <option value="volunteer">義工 (善後)</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-stone-800 font-bold mb-1">備註說明</label>
+                <input
+                  type="text"
+                  value={adminEditReqNotes}
+                  onChange={(e) => setAdminEditReqNotes(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAdminEditingRequest(null)}
+                  className="flex-1 py-3 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
+                >
+                  儲存修改
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Edit Offer Modal */}
+      {adminEditingOffer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-stone-100 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in">
+            <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-amber-700" />
+                  修改車輛資訊
+                </h3>
+                <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
+                  報名報到組後台管理修訂
+                </p>
+              </div>
+              <button
+                onClick={() => setAdminEditingOffer(null)}
+                className="w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xl font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAdminEditOffer} className="space-y-4 text-xs md:text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">車主姓名</label>
+                  <input
+                    type="text"
+                    required
+                    value={adminEditDriverName}
+                    onChange={(e) => setAdminEditDriverName(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">車主電話</label>
+                  <input
+                    type="tel"
+                    required
+                    value={adminEditDriverPhone}
+                    onChange={(e) => setAdminEditDriverPhone(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">WhatsApp</label>
+                  <input
+                    type="text"
+                    value={adminEditDriverWechat}
+                    onChange={(e) => setAdminEditDriverWechat(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">出發區域</label>
+                  <select
+                    value={adminEditDriverArea}
+                    onChange={(e) => setAdminEditDriverArea(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl font-bold"
+                  >
+                    {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-stone-800 font-bold mb-1">集合接送點</label>
+                <input
+                  type="text"
+                  value={adminEditDriverPoint}
+                  onChange={(e) => setAdminEditDriverPoint(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">車型</label>
+                  <input
+                    type="text"
+                    value={adminEditCarModel}
+                    onChange={(e) => setAdminEditCarModel(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">車色</label>
+                  <input
+                    type="text"
+                    value={adminEditCarColor}
+                    onChange={(e) => setAdminEditCarColor(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">車牌</label>
+                  <input
+                    type="text"
+                    value={adminEditPlateNumber}
+                    onChange={(e) => setAdminEditPlateNumber(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {/* Legs */}
+              <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-stone-900">去程出發時間 / 車位：</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={adminEditOutboundTime}
+                      onChange={(e) => setAdminEditOutboundTime(e.target.value)}
+                      className="w-32 px-2 py-1 text-xs border border-stone-300 rounded"
+                    />
+                    <select
+                      value={adminEditOutboundTotalSeats}
+                      onChange={(e) => setAdminEditOutboundTotalSeats(Number(e.target.value))}
+                      className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                        <option key={n} value={n}>{n} 位</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-stone-200">
+                  <span className="font-bold text-stone-900">回程出發時間 / 車位：</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={adminEditReturnTime}
+                      onChange={(e) => setAdminEditReturnTime(e.target.value)}
+                      className="w-32 px-2 py-1 text-xs border border-stone-300 rounded"
+                    />
+                    <select
+                      value={adminEditReturnTotalSeats}
+                      onChange={(e) => setAdminEditReturnTotalSeats(Number(e.target.value))}
+                      className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                        <option key={n} value={n}>{n} 位</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-stone-800 font-bold mb-1">備註說明</label>
+                <input
+                  type="text"
+                  value={adminEditNotes}
+                  onChange={(e) => setAdminEditNotes(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-xl"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAdminEditingOffer(null)}
+                  className="flex-1 py-3 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
+                >
+                  儲存修改
                 </button>
               </div>
             </form>

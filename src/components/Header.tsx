@@ -1,6 +1,8 @@
 import React from 'react';
-import { Car, Users, ClipboardCheck, RotateCcw, MapPin, Calendar } from 'lucide-react';
+import { Car, Users, ClipboardCheck, RotateCcw, MapPin, Calendar, Globe } from 'lucide-react';
 import type { Event } from '../types';
+import { useLanguage } from '../i18n/LanguageContext';
+import type { Language } from '../i18n/types';
 
 interface HeaderProps {
   currentTab: 'passenger' | 'driver' | 'admin';
@@ -19,7 +21,13 @@ export const Header: React.FC<HeaderProps> = ({
   setSelectedEventId,
   onResetData,
 }) => {
+  const { language, setLanguage, t } = useLanguage();
 
+  const languages: { code: Language; label: string }[] = [
+    { code: 'zh-TW', label: '繁體' },
+    { code: 'zh-CN', label: '简体' },
+    { code: 'en', label: 'English' }
+  ];
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-amber-100 shadow-xs">
@@ -28,16 +36,37 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs md:text-sm">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-            <span className="font-semibold tracking-wide">空山寺中秋交通互助平台 • 義工與正行車位共乘</span>
+            <span className="font-semibold tracking-wide">{t.topBanner}</span>
           </div>
-          <button
-            onClick={onResetData}
-            title="將資料還原為初始範例狀態"
-            className="flex items-center gap-1 text-amber-200 hover:text-white transition-colors cursor-pointer py-1 px-2.5 rounded-md hover:bg-stone-800/80 text-xs font-medium"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>重置範例資料</span>
-          </button>
+
+          <div className="flex items-center gap-3">
+            {/* Language Switcher */}
+            <div className="flex items-center bg-stone-900/60 rounded-lg p-0.5 border border-amber-500/30">
+              <Globe className="w-3.5 h-3.5 text-amber-300 ml-1.5 mr-1" />
+              {languages.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => setLanguage(l.code)}
+                  className={`px-2 py-0.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    language === l.code
+                      ? 'bg-amber-500 text-stone-950 shadow-xs'
+                      : 'text-amber-100/80 hover:text-white hover:bg-stone-800'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={onResetData}
+              title={t.resetDemoData}
+              className="flex items-center gap-1 text-amber-200 hover:text-white transition-colors cursor-pointer py-1 px-2 rounded-md hover:bg-stone-800/80 text-xs font-medium"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{t.resetDemoData}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -52,15 +81,15 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl md:text-2xl font-black text-stone-900 tracking-tight flex items-center gap-1.5">
-                  空山寺 <span className="text-base md:text-lg font-bold text-stone-600">中秋共乘網</span>
+                  {t.appTitle} <span className="text-base md:text-lg font-bold text-stone-600">{t.appSubtitle}</span>
                 </h1>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
-                  美東 • 義工/正行
+                  {t.subRegionTag}
                 </span>
               </div>
               <p className="text-xs md:text-sm text-stone-600 flex items-center gap-1 mt-0.5 font-medium">
                 <MapPin className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>174 Hynes RD, Poughquag, NY 12570</span>
+                <span>{t.templeAddress}</span>
               </p>
             </div>
           </div>
@@ -71,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
             <select
               value={selectedEventId}
               onChange={(e) => setSelectedEventId(e.target.value)}
-              aria-label="選擇活動"
+              aria-label={t.selectEvent}
               className="bg-transparent text-xs md:text-sm font-bold text-stone-800 focus:outline-hidden cursor-pointer w-full md:w-auto pr-2"
             >
               {events.map((evt) => (
@@ -94,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Users className="w-5 h-5" />
-            <span>🙋 我要搭車</span>
+            <span>{t.tabPassenger}</span>
           </button>
 
           <button
@@ -106,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Car className="w-5 h-5" />
-            <span>🚗 我有空位</span>
+            <span>{t.tabDriver}</span>
           </button>
 
           <button
@@ -118,7 +147,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <ClipboardCheck className="w-5 h-5" />
-            <span>📋 報名報到組後台</span>
+            <span>{t.tabAdmin}</span>
           </button>
         </div>
       </div>

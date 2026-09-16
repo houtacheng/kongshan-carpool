@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Event, CarpoolOffer, RideRequest } from '../types';
 import { EAST_COAST_AREAS } from '../data/mockData';
+import { useLanguage } from '../i18n/LanguageContext';
 import {
   Car,
   MapPin,
@@ -11,7 +12,9 @@ import {
   Sparkles,
   Heart,
   CheckCircle,
-  UserPlus
+  UserPlus,
+  Edit3,
+  CheckCircle2
 } from 'lucide-react';
 
 interface DriverViewProps {
@@ -20,6 +23,7 @@ interface DriverViewProps {
   requests: RideRequest[];
   onCreateOffer: (offer: Omit<CarpoolOffer, 'id' | 'createdAt' | 'outboundPassengers' | 'returnPassengers'>) => void;
   onDeleteOffer: (offerId: string) => void;
+  onUpdateOffer?: (offer: CarpoolOffer) => void;
   onMatchRequestToOffer: (requestId: string, offerId: string, leg: 'outbound' | 'return' | 'both') => boolean;
 }
 
@@ -29,8 +33,10 @@ export const DriverView: React.FC<DriverViewProps> = ({
   requests,
   onCreateOffer,
   onDeleteOffer,
+  onUpdateOffer,
   onMatchRequestToOffer,
 }) => {
+  const { t } = useLanguage();
   const [driverTab, setDriverTab] = useState<'create' | 'my-cars' | 'pending-requests'>('create');
 
   // Form states
@@ -43,6 +49,87 @@ export const DriverView: React.FC<DriverViewProps> = ({
   const [carColor, setCarColor] = useState('白色');
   const [plateNumber, setPlateNumber] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Edit Offer Modal states
+  const [editingOffer, setEditingOffer] = useState<CarpoolOffer | null>(null);
+  const [editDriverName, setEditDriverName] = useState('');
+  const [editDriverPhone, setEditDriverPhone] = useState('');
+  const [editWechat, setEditWechat] = useState('');
+  const [editArea, setEditArea] = useState('法拉盛 Flushing (NY)');
+  const [editPoint, setEditPoint] = useState('');
+  const [editCarModel, setEditCarModel] = useState('');
+  const [editCarColor, setEditCarColor] = useState('');
+  const [editPlateNumber, setEditPlateNumber] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editHasOutbound, setEditHasOutbound] = useState(true);
+  const [editOutboundTime, setEditOutboundTime] = useState('');
+  const [editOutboundMode, setEditOutboundMode] = useState<'volunteer' | 'attendee' | 'both'>('volunteer');
+  const [editOutboundTotalSeats, setEditOutboundTotalSeats] = useState(4);
+  const [editHasReturn, setEditHasReturn] = useState(true);
+  const [editReturnTime, setEditReturnTime] = useState('');
+  const [editReturnMode, setEditReturnMode] = useState<'volunteer' | 'attendee' | 'both'>('attendee');
+  const [editReturnTotalSeats, setEditReturnTotalSeats] = useState(4);
+  const [editOfferSuccess, setEditOfferSuccess] = useState('');
+
+  const handleOpenEditOffer = (offer: CarpoolOffer) => {
+    setEditingOffer(offer);
+    setEditDriverName(offer.driverName);
+    setEditDriverPhone(offer.driverPhone);
+    setEditWechat(offer.wechatOrLine || '');
+    setEditArea(offer.departureArea);
+    setEditPoint(offer.departurePoint);
+    setEditCarModel(offer.carModel);
+    setEditCarColor(offer.carColor || '');
+    setEditPlateNumber(offer.plateNumber || '');
+    setEditNotes(offer.notes || '');
+    setEditHasOutbound(offer.hasOutbound);
+    setEditOutboundTime(offer.outboundTime);
+    setEditOutboundMode(offer.outboundMode);
+    setEditOutboundTotalSeats(offer.outboundTotalSeats);
+    setEditHasReturn(offer.hasReturn);
+    setEditReturnTime(offer.returnTime);
+    setEditReturnMode(offer.returnMode);
+    setEditReturnTotalSeats(offer.returnTotalSeats);
+    setEditOfferSuccess('');
+  };
+
+  const handleSaveEditOffer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOffer || !onUpdateOffer) return;
+
+    const outPassCount = editingOffer.outboundPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+    const retPassCount = editingOffer.returnPassengers.reduce((sum, p) => sum + p.passengerCount, 0);
+
+    const updated: CarpoolOffer = {
+      ...editingOffer,
+      driverName: editDriverName.trim(),
+      driverPhone: editDriverPhone.trim(),
+      wechatOrLine: editWechat.trim(),
+      departureArea: editArea,
+      departurePoint: editPoint.trim(),
+      carModel: editCarModel.trim(),
+      carColor: editCarColor.trim(),
+      plateNumber: editPlateNumber.trim(),
+      notes: editNotes.trim(),
+      hasOutbound: editHasOutbound,
+      outboundTime: editOutboundTime.trim(),
+      outboundMode: editOutboundMode,
+      outboundTotalSeats: editOutboundTotalSeats,
+      outboundAvailableSeats: Math.max(0, editOutboundTotalSeats - outPassCount),
+      hasReturn: editHasReturn,
+      returnTime: editReturnTime.trim(),
+      returnMode: editReturnMode,
+      returnTotalSeats: editReturnTotalSeats,
+      returnAvailableSeats: Math.max(0, editReturnTotalSeats - retPassCount)
+    };
+
+    onUpdateOffer(updated);
+    setEditOfferSuccess(t.updateSuccess);
+    setTimeout(() => {
+      setEditingOffer(null);
+      setEditOfferSuccess('');
+    }, 1200);
+  };
 
   // Outbound configs
   const [hasOutbound, setHasOutbound] = useState(true);
@@ -232,11 +319,11 @@ export const DriverView: React.FC<DriverViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-stone-800 font-bold mb-1.5 text-xs md:text-sm">
-                  微信 WeChat ID 或 LINE (選填)
+                  {t.driverContactLabel}
                 </label>
                 <input
                   type="text"
-                  placeholder="例：lin_ny88"
+                  placeholder="例：+1 917-xxx-xxxx (WhatsApp)"
                   value={wechatOrLine}
                   onChange={(e) => setWechatOrLine(e.target.value)}
                   className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
@@ -496,17 +583,26 @@ export const DriverView: React.FC<DriverViewProps> = ({
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        if (confirm(`確定要取消 ${offer.driverName} 發布的這趟車次嗎？`)) {
-                          onDeleteOffer(offer.id);
-                        }
-                      }}
-                      className="text-xs md:text-sm text-red-600 hover:text-red-700 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer self-start md:self-auto font-bold"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      取消此車發布
-                    </button>
+                    <div className="flex items-center gap-2 self-start md:self-auto">
+                      <button
+                        onClick={() => handleOpenEditOffer(offer)}
+                        className="text-xs md:text-sm text-amber-900 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer font-bold transition-colors"
+                      >
+                        <Edit3 className="w-4 h-4 text-amber-700" />
+                        <span>{t.editOfferBtn}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`確定要取消 ${offer.driverName} 發布的這趟車次嗎？`)) {
+                            onDeleteOffer(offer.id);
+                          }
+                        }}
+                        className="text-xs md:text-sm text-red-600 hover:text-red-700 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer font-bold transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        取消此車發布
+                      </button>
+                    </div>
                   </div>
 
                   {/* Outbound & Return Passengers Grids */}
@@ -709,6 +805,256 @@ export const DriverView: React.FC<DriverViewProps> = ({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Edit Offer Modal */}
+      {editingOffer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-stone-100 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in">
+            <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-amber-700" />
+                  {t.editOfferModalTitle}
+                </h3>
+                <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
+                  可隨時調整出發時間、車位數量與接送地點
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingOffer(null)}
+                className="w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xl font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editOfferSuccess ? (
+              <div className="py-8 text-center space-y-2">
+                <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
+                <h4 className="text-lg font-bold text-stone-900">{editOfferSuccess}</h4>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveEditOffer} className="space-y-4 text-xs md:text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">{t.driverNameLabel}</label>
+                    <input
+                      type="text"
+                      required
+                      value={editDriverName}
+                      onChange={(e) => setEditDriverName(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">{t.driverPhoneLabel}</label>
+                    <input
+                      type="tel"
+                      required
+                      value={editDriverPhone}
+                      onChange={(e) => setEditDriverPhone(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">{t.driverContactLabel}</label>
+                    <input
+                      type="text"
+                      placeholder="例：+1 917-xxx-xxxx"
+                      value={editWechat}
+                      onChange={(e) => setEditWechat(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">{t.driverAreaLabel}</label>
+                    <select
+                      value={editArea}
+                      onChange={(e) => setEditArea(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500 font-bold"
+                    >
+                      {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverPointLabel}</label>
+                  <input
+                    type="text"
+                    value={editPoint}
+                    onChange={(e) => setEditPoint(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">{t.driverCarModelLabel}</label>
+                    <input
+                      type="text"
+                      value={editCarModel}
+                      onChange={(e) => setEditCarModel(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">{t.driverCarColorLabel}</label>
+                    <input
+                      type="text"
+                      value={editCarColor}
+                      onChange={(e) => setEditCarColor(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1">{t.driverPlateLabel}</label>
+                    <input
+                      type="text"
+                      value={editPlateNumber}
+                      onChange={(e) => setEditPlateNumber(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Outbound Settings */}
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                    <input
+                      type="checkbox"
+                      checked={editHasOutbound}
+                      onChange={(e) => setEditHasOutbound(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded"
+                    />
+                    <span>{t.driverOfferOutbound}</span>
+                  </label>
+                  {editHasOutbound && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      <div>
+                        <label className="block text-stone-600 text-xs font-bold mb-0.5">{t.departureTime}</label>
+                        <input
+                          type="text"
+                          value={editOutboundTime}
+                          onChange={(e) => setEditOutboundTime(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-stone-600 text-xs font-bold mb-0.5">{t.driverOutboundSeats}</label>
+                        <select
+                          value={editOutboundTotalSeats}
+                          onChange={(e) => setEditOutboundTotalSeats(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs font-bold"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                            <option key={n} value={n}>{n} 個座位</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-stone-600 text-xs font-bold mb-0.5">{t.driverOutboundMode}</label>
+                        <select
+                          value={editOutboundMode}
+                          onChange={(e) => setEditOutboundMode(e.target.value as any)}
+                          className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs font-bold"
+                        >
+                          <option value="volunteer">{t.roleVolunteer}</option>
+                          <option value="attendee">{t.roleAttendee}</option>
+                          <option value="both">{t.roleBoth}</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Return Settings */}
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                    <input
+                      type="checkbox"
+                      checked={editHasReturn}
+                      onChange={(e) => setEditHasReturn(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded"
+                    />
+                    <span>{t.driverOfferReturn}</span>
+                  </label>
+                  {editHasReturn && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      <div>
+                        <label className="block text-stone-600 text-xs font-bold mb-0.5">{t.departureTime}</label>
+                        <input
+                          type="text"
+                          value={editReturnTime}
+                          onChange={(e) => setEditReturnTime(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-stone-600 text-xs font-bold mb-0.5">{t.driverReturnSeats}</label>
+                        <select
+                          value={editReturnTotalSeats}
+                          onChange={(e) => setEditReturnTotalSeats(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs font-bold"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                            <option key={n} value={n}>{n} 個座位</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-stone-600 text-xs font-bold mb-0.5">{t.driverReturnMode}</label>
+                        <select
+                          value={editReturnMode}
+                          onChange={(e) => setEditReturnMode(e.target.value as any)}
+                          className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs font-bold"
+                        >
+                          <option value="attendee">{t.roleAttendee}</option>
+                          <option value="volunteer">{t.roleVolunteer}</option>
+                          <option value="both">{t.roleBoth}</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1">{t.driverNotesLabel}</label>
+                  <input
+                    type="text"
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingOffer(null)}
+                    className="flex-1 py-3 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
+                  >
+                    {t.cancelEditBtn}
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
+                  >
+                    {t.saveChangesBtn}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -44,6 +44,72 @@ export const INITIAL_EVENTS: Event[] = [
   }
 ];
 
+export function getLocalizedEvent(evt: Event, lang: 'zh-TW' | 'zh-CN' | 'en'): Event {
+  if (lang === 'en') {
+    return {
+      ...evt,
+      title: 'Kong Shan Temple Mid-Autumn Tea Gathering',
+      theme: '“Reunion in Dharma, Gathering in Heart” — Bright Moonlight Shines in the Blue Sky',
+      subtitle: 'On this Mid-Autumn Festival, Kong Shan Temple cordially invites you, your family, and friends to gather by the lake for an uplifting and heartwarming tea gathering.',
+      date: 'Sunday, September 27, 2026',
+      templeName: 'Kong Shan Temple',
+      volunteerArrivalTime: 'Arrive before 08:00 (Vegetarian BBQ prep, venue setup, registration team)',
+      attendeeArrivalTime: '09:00 ~ 09:30 Arrival, 09:30 Lakeside Assembly',
+      assemblyNotes: 'Lakeside vegetarian BBQ at noon, afternoon class study reflections and Lamrim Q&A. Travel time from various NY/NJ/CT areas is approx. 1.5 - 2 hrs; please allow ample travel time.',
+      reminders: [
+        'Please bring your own picnic mats, reusable dining utensils, and water bottles.',
+        'Each class should prepare a class reflection summary (each class signs up).',
+        'Lamrim trivia Q&A scope: Karma (Cause and Effect).',
+        'Kong Shan Temple will provide hearty vegetarian BBQ ingredients for all to enjoy.'
+      ],
+      schedule: [
+        { time: '09:00 ~ 09:30', activity: 'Arrival & Check-In', detail: 'Arrival at temple and parking' },
+        { time: '09:30', activity: 'Lakeside Assembly', detail: 'Gather on lakeside lawn' },
+        { time: '09:30 ~ 10:15', activity: 'Mid-Autumn Chanting & Circumambulation', detail: 'Praise of Dependent Arising, Lamrim Prayers, Migtsema', highlight: true },
+        { time: '10:15 ~ 11:00', activity: 'Intermission (Move to Main Hall)', detail: 'Enter Main Hall' },
+        { time: '11:00 ~ 11:15', activity: "Venerable's Mid-Autumn Dharma Discourse", detail: 'Receive inspiring Dharma discourse' },
+        { time: '11:15 ~ 11:45', activity: 'Grand Buddha Offering', detail: 'Solemn offering before the Buddha' },
+        { time: '11:45 ~ 14:00', activity: 'Lakeside Vegetarian BBQ Feast', detail: 'Enjoy BBQ feast & fellowship by the lake', highlight: true },
+        { time: '14:00 ~ 15:30', activity: 'Lakeside Reflections & Quick Q&A', detail: 'Class reflections (45m) • Lamrim Q&A: Karma (20m) • Summary (25m)', highlight: true },
+        { time: '15:30 ~ 16:30', activity: 'Cleanup / Departure', detail: 'Attendees depart at 15:30 / Volunteers depart after cleanup at 16:30' }
+      ]
+    };
+  }
+
+  if (lang === 'zh-CN') {
+    return {
+      ...evt,
+      title: '空山寺中秋普茶',
+      theme: '《以法团圆．以心相聚》——明月之光，永耀蓝空',
+      subtitle: '值此中秋佳节，空山寺诚挚邀请您与家人朋友齐聚湖畔，共度一场充满法喜与温暖的中秋普茶活动。',
+      date: '2026年9月27日（周日）',
+      templeName: '空山寺 (Kong Shan Temple)',
+      volunteerArrivalTime: '08:00 前抵达寺院（素烤备料、会场布置、报名报到组）',
+      attendeeArrivalTime: '09:00 ~ 09:30 入寺，09:30 湖畔集合',
+      assemblyNotes: '午间于湖畔共享素烤盛宴，下午由各班分享学习心得与修学收获，并进行广论快问快答。美东各区车程约 1.5 ~ 2 小时，请大家宽裕估算时间。',
+      reminders: [
+        '各班请自备野餐垫和环保餐具、水杯。',
+        '各班要准备班级总结（每班要报名）。',
+        '广论班快问快答范围：业果。',
+        '空山寺备有湖畔素烤丰盛食材供大众共享。'
+      ],
+      schedule: [
+        { time: '09:00 ~ 09:30', activity: '入寺报到', detail: '大众抵达寺院停车整装' },
+        { time: '09:30', activity: '湖畔集合', detail: '湖畔草坪集合' },
+        { time: '09:30 ~ 10:15', activity: '中秋课诵 + 绕湖持咒共修', detail: '缘起赞、广论祈愿文、密集嘛', highlight: true },
+        { time: '10:15 ~ 11:00', activity: '休息（移动至佛堂）', detail: '整队入佛堂' },
+        { time: '11:00 ~ 11:15', activity: '法师中秋开示', detail: '聆听法师慈悲开示' },
+        { time: '11:15 ~ 11:45', activity: '佛前大供', detail: '庄严供佛' },
+        { time: '11:45 ~ 14:00', activity: '湖畔素烤盛宴', detail: '湖畔共享素烤、交流情谊', highlight: true },
+        { time: '14:00 ~ 15:30', activity: '湖畔总结与快问快答', detail: '各班学习总结 (45 min) • 广论快问快答：业果 (20 min) • 空山寺总结+结示 (25 min)', highlight: true },
+        { time: '15:30 ~ 16:30', activity: '善后整理 / 赋归', detail: '正行大众赋归（15:30）/ 义工善后整理完毕赋归（16:30）' }
+      ]
+    };
+  }
+
+  return evt;
+}
+
 export const INITIAL_OFFERS: CarpoolOffer[] = [
   {
     id: 'offer-flushing-1',

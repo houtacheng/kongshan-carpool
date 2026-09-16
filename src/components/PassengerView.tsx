@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Event, CarpoolOffer, RideRequest, ParticipantRole } from '../types';
-import { EAST_COAST_AREAS } from '../data/mockData';
+import { EAST_COAST_AREAS, getLocalizedEvent } from '../data/mockData';
+import { useLanguage } from '../i18n/LanguageContext';
 import {
   MapPin,
   Clock,
@@ -19,7 +20,10 @@ import {
   ChevronDown,
   ChevronUp,
   Utensils,
-  HelpCircle
+  HelpCircle,
+  Edit3,
+  Trash2,
+  FileText
 } from 'lucide-react';
 
 interface PassengerViewProps {
@@ -39,6 +43,8 @@ interface PassengerViewProps {
     note: string
   ) => boolean;
   onCreateRequest: (request: Omit<RideRequest, 'id' | 'createdAt' | 'status'>) => void;
+  onUpdateRequest?: (updatedRequest: RideRequest) => void;
+  onCancelRequest?: (requestId: string) => void;
 }
 
 export const PassengerView: React.FC<PassengerViewProps> = ({
@@ -47,7 +53,11 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
   requests,
   onBookSeat,
   onCreateRequest,
+  onUpdateRequest,
+  onCancelRequest,
 }) => {
+  const { language, t } = useLanguage();
+  const localizedEvent = getLocalizedEvent(currentEvent, language);
   // Filters
   const [selectedLeg, setSelectedLeg] = useState<'all' | 'outbound' | 'return'>('all');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<'all' | 'volunteer' | 'attendee'>('all');
@@ -88,6 +98,65 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
   const [reqReturnRole, setReqReturnRole] = useState<ParticipantRole>('attendee');
   const [reqNotes, setReqNotes] = useState('');
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+
+  // Section toggle: 'offers' or 'my-requests'
+  const [activePassengerSection, setActivePassengerSection] = useState<'offers' | 'my-requests'>('offers');
+
+  // Edit request modal state
+  const [editingRequest, setEditingRequest] = useState<RideRequest | null>(null);
+  const [editReqName, setEditReqName] = useState('');
+  const [editReqPhone, setEditReqPhone] = useState('');
+  const [editReqWechat, setEditReqWechat] = useState('');
+  const [editReqArea, setEditReqArea] = useState('法拉盛 Flushing (NY)');
+  const [editReqPoint, setEditReqPoint] = useState('');
+  const [editReqCount, setEditReqCount] = useState(1);
+  const [editReqNeedOutbound, setEditReqNeedOutbound] = useState(true);
+  const [editReqOutboundRole, setEditReqOutboundRole] = useState<ParticipantRole>('volunteer');
+  const [editReqNeedReturn, setEditReqNeedReturn] = useState(true);
+  const [editReqReturnRole, setEditReqReturnRole] = useState<ParticipantRole>('attendee');
+  const [editReqNotes, setEditReqNotes] = useState('');
+  const [editSuccessMsg, setEditSuccessMsg] = useState('');
+
+  const handleOpenEditRequest = (req: RideRequest) => {
+    setEditingRequest(req);
+    setEditReqName(req.passengerName);
+    setEditReqPhone(req.passengerPhone);
+    setEditReqWechat(req.wechatOrLine || '');
+    setEditReqArea(req.pickupArea);
+    setEditReqPoint(req.pickupPoint);
+    setEditReqCount(req.passengerCount);
+    setEditReqNeedOutbound(req.needOutbound);
+    setEditReqOutboundRole(req.outboundRole);
+    setEditReqNeedReturn(req.needReturn);
+    setEditReqReturnRole(req.returnRole);
+    setEditReqNotes(req.notes || '');
+    setEditSuccessMsg('');
+  };
+
+  const handleSaveEditRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRequest || !onUpdateRequest) return;
+    const updated: RideRequest = {
+      ...editingRequest,
+      passengerName: editReqName.trim(),
+      passengerPhone: editReqPhone.trim(),
+      wechatOrLine: editReqWechat.trim(),
+      pickupArea: editReqArea,
+      pickupPoint: editReqPoint.trim(),
+      passengerCount: editReqCount,
+      needOutbound: editReqNeedOutbound,
+      outboundRole: editReqOutboundRole,
+      needReturn: editReqNeedReturn,
+      returnRole: editReqReturnRole,
+      notes: editReqNotes.trim()
+    };
+    onUpdateRequest(updated);
+    setEditSuccessMsg(t.updateSuccess);
+    setTimeout(() => {
+      setEditingRequest(null);
+      setEditSuccessMsg('');
+    }, 1200);
+  };
 
   const pendingRequestsCount = requests.filter(
     (r) => r.eventId === currentEvent.id && r.status !== 'matched_full'
@@ -232,41 +301,41 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 text-xs md:text-sm font-bold border border-amber-300">
               <Sparkles className="w-4 h-4 text-amber-700" />
-              空山寺 • 中秋普茶活動
+              <span>{t.appTitle} • {localizedEvent.title}</span>
             </div>
             <h2 className="text-2xl md:text-3xl font-black text-stone-900 tracking-tight">
-              {currentEvent.title}
+              {localizedEvent.title}
             </h2>
             <div className="text-sm md:text-base text-amber-900 font-bold bg-amber-100/50 py-1 px-2.5 rounded-lg inline-block border border-amber-200/60">
-              {currentEvent.theme}
+              {localizedEvent.theme}
             </div>
             <p className="text-xs md:text-sm text-stone-600 font-medium leading-relaxed max-w-2xl">
-              {currentEvent.subtitle}
+              {localizedEvent.subtitle}
             </p>
           </div>
 
           <div className="space-y-2 text-xs md:text-sm text-stone-800 bg-white/95 p-4 rounded-2xl border border-amber-200 shadow-2xs shrink-0">
             <div className="flex items-center gap-2 font-black text-stone-900 text-sm md:text-base">
               <Calendar className="w-5 h-5 text-amber-700 shrink-0" />
-              <span>{currentEvent.date}</span>
+              <span>{localizedEvent.date}</span>
             </div>
             <div className="flex items-start gap-2">
               <Clock className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-orange-800">義工集合：</span>
-                <span className="font-semibold">{currentEvent.volunteerArrivalTime}</span>
+                <span className="font-bold text-orange-800">{t.roleVolunteer}：</span>
+                <span className="font-semibold">{localizedEvent.volunteerArrivalTime}</span>
               </div>
             </div>
             <div className="flex items-start gap-2">
               <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-amber-800">入寺集合：</span>
-                <span className="font-semibold">{currentEvent.attendeeArrivalTime}</span>
+                <span className="font-bold text-amber-800">{t.roleAttendee}：</span>
+                <span className="font-semibold">{localizedEvent.attendeeArrivalTime}</span>
               </div>
             </div>
             <div className="flex items-start gap-2 pt-1.5 border-t border-stone-200 text-stone-700 text-xs">
               <MapPin className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-              <span className="font-bold">{currentEvent.location}</span>
+              <span className="font-bold">{localizedEvent.location}</span>
             </div>
           </div>
         </div>
@@ -279,10 +348,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
           >
             <div className="flex items-center gap-2">
               <Utensils className="w-5 h-5 text-amber-800" />
-              <span>📋 查看 9/27 當日活動流程時刻表 & 自備用品提醒</span>
+              <span>📋 {showSchedule ? t.scheduleToggleClose : t.scheduleToggleOpen}</span>
             </div>
             <div className="flex items-center gap-1 text-xs text-amber-800">
-              <span>{showSchedule ? '收合流程' : '點擊展開'}</span>
+              <span>{showSchedule ? '▲' : '▼'}</span>
               {showSchedule ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </div>
           </button>
@@ -293,10 +362,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               <div>
                 <h4 className="font-black text-stone-900 text-sm md:text-base flex items-center gap-1.5 mb-2">
                   <HelpCircle className="w-4 h-4 text-orange-600" />
-                  注意事項與必備用品：
+                  {t.remindersTitle}：
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs md:text-sm">
-                  {currentEvent.reminders.map((item, idx) => (
+                  {localizedEvent.reminders.map((item, idx) => (
                     <div key={idx} className="flex items-center gap-2 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200 text-stone-800 font-bold">
                       <span className="w-2 h-2 rounded-full bg-amber-600 shrink-0" />
                       <span>{item}</span>
@@ -309,10 +378,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               <div>
                 <h4 className="font-black text-stone-900 text-sm md:text-base flex items-center gap-1.5 mb-2.5">
                   <Clock className="w-4 h-4 text-amber-700" />
-                  9/27 活動完整時間流程：
+                  {t.scheduleTitle}：
                 </h4>
                 <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden text-xs md:text-sm">
-                  {currentEvent.schedule.map((item, idx) => (
+                  {localizedEvent.schedule.map((item, idx) => (
                     <div
                       key={idx}
                       className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 ${
@@ -438,8 +507,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 md:w-52">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] md:w-52">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
@@ -448,6 +517,30 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 className="w-full bg-stone-50 pl-9 pr-3 py-2 text-sm border border-stone-200 rounded-xl focus:outline-hidden focus:border-amber-500 focus:bg-white"
               />
+            </div>
+
+            {/* Switch between Cars and My Requests */}
+            <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl border border-stone-200">
+              <button
+                onClick={() => setActivePassengerSection('offers')}
+                className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all cursor-pointer ${
+                  activePassengerSection === 'offers'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'text-stone-700 hover:bg-white'
+                }`}
+              >
+                🚗 現有車位 ({filteredOffers.length})
+              </button>
+              <button
+                onClick={() => setActivePassengerSection('my-requests')}
+                className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all cursor-pointer ${
+                  activePassengerSection === 'my-requests'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'text-stone-700 hover:bg-white'
+                }`}
+              >
+                📋 {t.myRequestsTab} ({requests.filter(r => r.eventId === currentEvent.id).length})
+              </button>
             </div>
 
             <button
@@ -461,18 +554,141 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
         </div>
       </div>
 
-      {/* Carpool Offers Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-3.5">
-          <h3 className="font-black text-lg md:text-xl text-stone-900 flex items-center gap-2">
-            <Car className="w-6 h-6 text-amber-700" />
-            可搭乘車次清單
-            <span className="text-xs md:text-sm px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
-              共 {filteredOffers.length} 輛車
-            </span>
-          </h3>
-          <span className="text-xs md:text-sm text-stone-500 font-medium">可單選去程或回程</span>
+      {/* Conditionally render Offers OR My Requests */}
+      {activePassengerSection === 'my-requests' ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-black text-lg md:text-xl text-stone-900 flex items-center gap-2">
+              <FileText className="w-6 h-6 text-amber-700" />
+              {t.myRequestsTitle}
+            </h3>
+            <button
+              onClick={() => setIsRequestModalOpen(true)}
+              className="text-xs md:text-sm bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <PlusCircle className="w-4 h-4" />
+              登記新需求
+            </button>
+          </div>
+
+          {requests.filter((r) => r.eventId === currentEvent.id).length === 0 ? (
+            <div className="bg-white border border-dashed border-stone-300 rounded-3xl p-10 text-center space-y-3">
+              <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
+                <FileText className="w-7 h-7" />
+              </div>
+              <p className="text-stone-800 font-bold text-base">{t.noRequestsSubmitted}</p>
+              <button
+                onClick={() => setIsRequestModalOpen(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-600 text-white font-bold text-sm hover:bg-orange-700 transition-colors cursor-pointer shadow-xs"
+              >
+                <PlusCircle className="w-4 h-4" />
+                立即登記搭車需求
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {requests
+                .filter((r) => r.eventId === currentEvent.id)
+                .map((req) => (
+                  <div
+                    key={req.id}
+                    className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs flex flex-col justify-between space-y-3 hover:border-amber-300 transition-all"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-3">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-lg text-stone-900">{req.passengerName}</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold">
+                              {req.passengerCount} 位
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                              req.status === 'matched_full'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : req.status === 'matched_partial'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {req.status === 'matched_full' ? '已全數媒合' : req.status === 'matched_partial' ? '部分媒合' : '等候安排中'}
+                            </span>
+                          </div>
+                          <p className="text-xs md:text-sm text-stone-600 flex items-center gap-1 mt-1 font-medium">
+                            <Phone className="w-3.5 h-3.5 text-stone-400" />
+                            <span>{req.passengerPhone}</span>
+                            {req.wechatOrLine && <span className="text-stone-400">({req.wechatOrLine})</span>}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2 text-xs md:text-sm">
+                        <div className="flex items-start gap-2 text-stone-700">
+                          <MapPin className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                          <span>
+                            <strong className="text-stone-900">{req.pickupArea}</strong> - {req.pickupPoint || '未填具體地標'}
+                          </span>
+                        </div>
+
+                        <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-stone-600">去程：</span>
+                            <span className="font-bold text-stone-900">
+                              {req.needOutbound ? `需要 (${req.outboundRole === 'volunteer' ? '義工' : '正行'})` : '不需要'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-stone-600">回程：</span>
+                            <span className="font-bold text-stone-900">
+                              {req.needReturn ? `需要 (${req.returnRole === 'volunteer' ? '義工' : '正行'})` : '不需要'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {req.notes && (
+                          <div className="text-stone-500 text-xs italic bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+                            備註：{req.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2 border-t border-stone-100">
+                      <button
+                        onClick={() => handleOpenEditRequest(req)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs md:text-sm font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-amber-200"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                        <span>{t.editRequestBtn}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(t.cancelRequestConfirm)) {
+                            onCancelRequest?.(req.id);
+                          }
+                        }}
+                        className="py-2 px-3 rounded-xl hover:bg-red-50 text-red-600 text-xs md:text-sm font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-red-200"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{t.cancelRequestBtn}</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
+      ) : (
+        /* Carpool Offers Grid */
+        <div>
+          <div className="flex items-center justify-between mb-3.5">
+            <h3 className="font-black text-lg md:text-xl text-stone-900 flex items-center gap-2">
+              <Car className="w-6 h-6 text-amber-700" />
+              可搭乘車次清單
+              <span className="text-xs md:text-sm px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
+                共 {filteredOffers.length} 輛車
+              </span>
+            </h3>
+            <span className="text-xs md:text-sm text-stone-500 font-medium">可單選去程或回程</span>
+          </div>
 
         {filteredOffers.length === 0 ? (
           <div className="bg-white border border-dashed border-stone-300 rounded-2xl p-8 text-center space-y-3">
@@ -639,6 +855,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
           </div>
         )}
       </div>
+    )}
 
       {/* Booking Modal - Large Clean Touch Controls for Seniors */}
       {bookingOffer && (
@@ -1122,6 +1339,206 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
                   >
                     送出需求登記
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Request Modal */}
+      {editingRequest && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-stone-100 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in">
+            <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-amber-700" />
+                  {t.editRequestModalTitle}
+                </h3>
+                <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
+                  可隨時修改上車地點、人數或去回程需求
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingRequest(null)}
+                className="w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xl font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editSuccessMsg ? (
+              <div className="py-8 text-center space-y-2">
+                <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
+                <h4 className="text-lg font-bold text-stone-900">{editSuccessMsg}</h4>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveEditRequest} className="space-y-4 text-xs md:text-sm">
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
+                    {t.requestNameLabel} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editReqName}
+                    onChange={(e) => setEditReqName(e.target.value)}
+                    className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
+                      {t.requestPhoneLabel} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={editReqPhone}
+                      onChange={(e) => setEditReqPhone(e.target.value)}
+                      className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
+                      {t.requestContactLabel}
+                    </label>
+                    <input
+                      type="text"
+                      value={editReqWechat}
+                      onChange={(e) => setEditReqWechat(e.target.value)}
+                      className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
+                      {t.requestAreaLabel} <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={editReqArea}
+                      onChange={(e) => setEditReqArea(e.target.value)}
+                      className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500 font-bold"
+                    >
+                      {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
+                      {t.requestCountLabel} <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={editReqCount}
+                      onChange={(e) => setEditReqCount(Number(e.target.value))}
+                      className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500 font-bold"
+                    >
+                      {[1, 2, 3, 4].map((n) => (
+                        <option key={n} value={n}>
+                          {n} 位
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
+                    {t.requestPointLabel}
+                  </label>
+                  <input
+                    type="text"
+                    value={editReqPoint}
+                    onChange={(e) => setEditReqPoint(e.target.value)}
+                    className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                {/* Need Outbound & Role */}
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2.5 cursor-pointer font-bold text-stone-900 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={editReqNeedOutbound}
+                        onChange={(e) => setEditReqNeedOutbound(e.target.checked)}
+                        className="w-5 h-5 text-amber-600 rounded border-stone-300"
+                      />
+                      <span>{t.requestOutboundCheck}</span>
+                    </label>
+
+                    {editReqNeedOutbound && (
+                      <select
+                        value={editReqOutboundRole}
+                        onChange={(e) => setEditReqOutboundRole(e.target.value as ParticipantRole)}
+                        className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
+                      >
+                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
+                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Need Return & Role */}
+                  <div className="flex items-center justify-between pt-2 border-t border-stone-200">
+                    <label className="flex items-center gap-2.5 cursor-pointer font-bold text-stone-900 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={editReqNeedReturn}
+                        onChange={(e) => setEditReqNeedReturn(e.target.checked)}
+                        className="w-5 h-5 text-amber-600 rounded border-stone-300"
+                      />
+                      <span>{t.requestReturnCheck}</span>
+                    </label>
+
+                    {editReqNeedReturn && (
+                      <select
+                        value={editReqReturnRole}
+                        onChange={(e) => setEditReqReturnRole(e.target.value as ParticipantRole)}
+                        className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
+                      >
+                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
+                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-stone-800 font-bold mb-1 text-xs md:text-sm">
+                    {t.modalNotesLabel}
+                  </label>
+                  <input
+                    type="text"
+                    value={editReqNotes}
+                    onChange={(e) => setEditReqNotes(e.target.value)}
+                    className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingRequest(null)}
+                    className="flex-1 py-3.5 border border-stone-300 rounded-xl text-stone-700 font-bold hover:bg-stone-50 cursor-pointer"
+                  >
+                    {t.cancelEditBtn}
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black shadow-xs cursor-pointer text-base"
+                  >
+                    {t.saveChangesBtn}
                   </button>
                 </div>
               </form>
