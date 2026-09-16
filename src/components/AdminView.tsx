@@ -715,7 +715,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', isEn ? `Kong_Shan_Temple_Carpool_Roster.csv` : `空山寺中秋活動共乘名冊.csv`);
+    link.setAttribute('download', isEn ? `${currentEvent.title}_Carpool_Roster.csv` : `${currentEvent.title}_共乘名冊.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

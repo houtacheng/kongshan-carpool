@@ -38,17 +38,17 @@ export function getLocalizedArea(area: string, lang: Language): string {
 export const translations: Record<Language, TranslationDictionary> = {
   'zh-TW': {
     appTitle: '空山寺',
-    appSubtitle: '中秋共乘網',
+    appSubtitle: '共乘網',
     subRegionTag: '美東 • 義工/正行',
     templeAddress: '174 Hynes RD, Poughquag, NY 12570',
     resetDemoData: '重置範例資料',
-    resetConfirmPrompt: '確定要還原空山寺中秋法會的展示資料為初始狀態嗎？',
+    resetConfirmPrompt: '確定要還原空山寺法會的展示資料為初始狀態嗎？',
     tabPassenger: '🙋 我要搭車',
     tabDriver: '🚗 我有空位',
     tabAdmin: '📋 報名報到組後台',
     selectEvent: '選擇活動',
-    topBanner: '空山寺中秋交通互助平台 • 義工與正行車位共乘',
-    footerTagline: '空山寺 (Kong Shan Temple) • 美東中秋共乘服務網',
+    topBanner: '空山寺交通互助平台 • 義工與正行車位共乘',
+    footerTagline: '空山寺 (Kong Shan Temple) • 美東共乘服務網',
     footerSlogan: '共乘互助同行 • 彼此照應 • 圓滿順利',
 
     roleVolunteer: '義工',
@@ -168,7 +168,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     needLabel: '需要',
     notNeedLabel: '不需要',
 
-    driverTitle: '提供空山寺中秋共乘車位',
+    driverTitle: '提供空山寺共乘車位',
     driverSubtitle: '感謝您的善心與同行！去程與回程可分開設定時間與身份，方便靈活共乘。',
     tabOfferSeats: '➕ 我要登記提供車位',
     tabMyCars: '📋 我已登記的車輛',
@@ -327,17 +327,17 @@ export const translations: Record<Language, TranslationDictionary> = {
 
   'zh-CN': {
     appTitle: '空山寺',
-    appSubtitle: '中秋共乘网',
+    appSubtitle: '共乘网',
     subRegionTag: '美东 • 义工/正行',
     templeAddress: '174 Hynes RD, Poughquag, NY 12570',
     resetDemoData: '重置示例数据',
-    resetConfirmPrompt: '确定要还原空山寺中秋法会的展示数据为初始状态吗？',
+    resetConfirmPrompt: '确定要还原空山寺法会的展示数据为初始状态吗？',
     tabPassenger: '🙋 我要搭车',
     tabDriver: '🚗 我有空位',
     tabAdmin: '📋 报名报到组后台',
     selectEvent: '选择活动',
-    topBanner: '空山寺中秋交通互助平台 • 义工与正行车位共乘',
-    footerTagline: '空山寺 (Kong Shan Temple) • 美东中秋共乘服务网',
+    topBanner: '空山寺交通互助平台 • 义工与正行车位共乘',
+    footerTagline: '空山寺 (Kong Shan Temple) • 美东共乘服务网',
     footerSlogan: '共乘互助同行 • 彼此照应 • 圆满顺利',
 
     roleVolunteer: '义工',
@@ -457,7 +457,7 @@ export const translations: Record<Language, TranslationDictionary> = {
     needLabel: '需要',
     notNeedLabel: '不需要',
 
-    driverTitle: '提供空山寺中秋共乘车位',
+    driverTitle: '提供空山寺共乘车位',
     driverSubtitle: '感谢您的善心与同行！去程与回程可分开设定时间与身份，方便灵活共乘。',
     tabOfferSeats: '➕ 我要登记提供车位',
     tabMyCars: '📋 我已登记的车辆',
@@ -625,8 +625,8 @@ export const translations: Record<Language, TranslationDictionary> = {
     tabDriver: '🚗 Offer a Ride',
     tabAdmin: '📋 Registration Admin',
     selectEvent: 'Select Event',
-    topBanner: 'Kong Shan Temple Mid-Autumn Carpool Platform • Volunteer & Attendee Rides',
-    footerTagline: 'Kong Shan Temple • US East Mid-Autumn Carpool Network',
+    topBanner: 'Kong Shan Temple Carpool Platform • Volunteer & Attendee Rides',
+    footerTagline: 'Kong Shan Temple • US East Carpool Network',
     footerSlogan: 'Safe Travel Together • Caring for Each Other • Joyful Gathering',
 
     roleVolunteer: 'Volunteer',
