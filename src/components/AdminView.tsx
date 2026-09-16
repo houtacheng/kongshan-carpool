@@ -22,7 +22,6 @@ import {
   Sparkles,
   Wand2,
   ThumbsUp,
-  KeyRound,
   Edit3,
   Trash2,
   Shield,
@@ -89,8 +88,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [showEventModal, setShowEventModal] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [showManualGoogleSelector, setShowManualGoogleSelector] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
 
   const currentOffers = offers.filter((o) => o.eventId === currentEvent.id);
   const currentRequests = requests.filter((r) => r.eventId === currentEvent.id);
@@ -481,85 +478,57 @@ export const AdminView: React.FC<AdminViewProps> = ({
         return;
       }
 
+      // Check if designated Super Administrator
       const isSuper = email === 'houtacheng@gmail.com' || adminAccounts.length === 0;
-      const newAccount: AdminAccount = {
-        id: `acc-${Date.now()}`,
-        email,
-        name: displayName,
-        avatar: photoURL,
-        role: isSuper ? 'super_admin' : 'staff',
-        status: 'active',
-        authProvider: 'google',
-        registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-        lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-        note: isSuper ? '系統總護持' : '報名報到組組長'
-      };
 
-      onAddAccount(newAccount);
-      onLoginWithGoogle(newAccount);
+      if (isSuper) {
+        const newAccount: AdminAccount = {
+          id: `acc-${Date.now()}`,
+          email,
+          name: displayName || '系統管理員',
+          avatar: photoURL,
+          role: 'super_admin',
+          status: 'active',
+          authProvider: 'google',
+          registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          note: '系統管理員 (最高權限)'
+        };
+        onAddAccount(newAccount);
+        onLoginWithGoogle(newAccount);
+      } else {
+        // Any unknown Google account must be approved by 系統管理員 first
+        const pendingAccount: AdminAccount = {
+          id: `acc-${Date.now()}`,
+          email,
+          name: displayName,
+          avatar: photoURL,
+          role: 'staff',
+          status: 'pending',
+          authProvider: 'google',
+          registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          note: '新註冊待審核'
+        };
+        onAddAccount(pendingAccount);
+        setAuthError(
+          language === 'en'
+            ? `⏳ Your Google account (${email}) is pending review. Access will be granted upon System Administrator approval.`
+            : `⏳ 您的 Google 帳號 (${email}) 已提出授權申請。本後台含有信眾個人機密資料，請聯繫系統管理員審核啟用後方可存取！`
+        );
+      }
     } catch (err: any) {
-      console.warn('Google Sign-in popup blocked or aborted, switching to manual selector:', err);
-      setShowManualGoogleSelector(true);
+      console.warn('Google Sign-in error:', err);
+      if (err?.code === 'auth/popup-blocked') {
+        setAuthError(language === 'en' ? 'Popup was blocked by browser. Please allow popups.' : '瀏覽器封鎖了 Google 登入視窗，請允許彈跳視窗後再試一次！');
+      } else if (err?.code === 'auth/popup-closed-by-user') {
+        setAuthError(language === 'en' ? 'Google sign-in was cancelled.' : 'Google 登入已取消。');
+      } else {
+        setAuthError(err?.message || (language === 'en' ? 'Google sign-in failed.' : 'Google 登入失敗，請稍後再試。'));
+      }
     } finally {
       setIsGoogleSigningIn(false);
     }
-  };
-
-  const handleSelectPreAuthorizedAccount = (account: AdminAccount) => {
-    setAuthError('');
-    if (account.status === 'suspended') {
-      setAuthError(t.accountSuspendedNotice);
-      return;
-    }
-    if (account.status === 'pending') {
-      setAuthError(t.accountPendingNotice);
-      return;
-    }
-    onLoginWithGoogle({
-      ...account,
-      lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false })
-    });
-    setShowManualGoogleSelector(false);
-  };
-
-  const handleCustomGoogleEmailSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    const email = customGoogleEmail.trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      setAuthError(language === 'en' ? 'Please enter a valid Google email' : '請輸入正確的 Google 信箱');
-      return;
-    }
-
-    const existingAccount = adminAccounts.find((a) => a.email.toLowerCase() === email);
-    if (existingAccount) {
-      if (existingAccount.status === 'suspended') {
-        setAuthError(t.accountSuspendedNotice);
-        return;
-      }
-      onLoginWithGoogle({
-        ...existingAccount,
-        lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false })
-      });
-      setShowManualGoogleSelector(false);
-      return;
-    }
-
-    const isSuper = email === 'houtacheng@gmail.com' || adminAccounts.length === 0;
-    const newAcc: AdminAccount = {
-      id: `acc-${Date.now()}`,
-      email,
-      name: email.split('@')[0],
-      role: isSuper ? 'super_admin' : 'staff',
-      status: 'active',
-      authProvider: 'google',
-      registeredAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-      lastLoginAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-      note: isSuper ? '系統總護持' : '報名報到組組長'
-    };
-    onAddAccount(newAcc);
-    onLoginWithGoogle(newAcc);
-    setShowManualGoogleSelector(false);
   };
 
   const handleManualAssign = (requestId: string) => {
@@ -763,7 +732,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
           <div>
             <h2 className="text-2xl font-black text-stone-900 tracking-tight">
-              {language === 'en' ? 'Registration & Check-In Admin Portal' : '報名報到組幹部後台'}
+              {language === 'en' ? 'Registration & Check-In Admin Portal' : '報名報到組後台'}
             </h2>
             <p className="text-xs md:text-sm text-stone-500 mt-1 font-medium">
               {language === 'en' ? 'Protected by Google Account Authorization & Cloud Security Rules' : '由 Google 帳號授權與雲端權限規則保護'}
@@ -777,7 +746,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
           )}
 
-          {/* Google Sign-in Button */}
+          {/* Google Sign-in Button Only */}
           <div className="space-y-3 pt-2">
             <button
               onClick={handleGoogleSignIn}
@@ -804,14 +773,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </svg>
               <span>{isGoogleSigningIn ? (language === 'en' ? 'Connecting to Google...' : '正在連線 Google 帳號...') : t.googleSignInBtn}</span>
             </button>
-
-            <button
-              onClick={() => setShowManualGoogleSelector(true)}
-              className="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Users className="w-3.5 h-3.5 text-stone-500" />
-              <span>{language === 'en' ? 'Select from Authorized Google Staff Accounts' : '從後台授權名冊中選擇登入'}</span>
-            </button>
           </div>
 
           {/* Privacy & Security Note */}
@@ -823,86 +784,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <p>
               {language === 'en'
                 ? 'Only verified and active staff accounts can view unmasked passenger phone numbers and WhatsApp IDs.'
-                : '本後台含有信眾與同修之個人電話與聯絡方式，唯有經系統總護持審核啟用之 Google 帳號方可存取。'}
+                : '本後台含有信眾與同修之個人電話與聯絡方式，唯有經系統管理員審核啟用之 Google 帳號方可存取。'}
             </p>
           </div>
         </div>
-
-        {/* Modal: Select Authorized Account / Register Email */}
-        {showManualGoogleSelector && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in">
-            <div className="bg-white rounded-3xl border border-stone-200 shadow-2xl w-full max-w-md p-6 space-y-5">
-              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-                <h3 className="font-black text-stone-900 text-base flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-amber-700" />
-                  <span>{language === 'en' ? 'Select Authorized Google Account' : '選擇已授權 Google 帳號'}</span>
-                </h3>
-                <button
-                  onClick={() => setShowManualGoogleSelector(false)}
-                  className="text-stone-400 hover:text-stone-700 p-1"
-                >
-                  <KeyRound className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {adminAccounts.map((acc) => (
-                  <button
-                    key={acc.id}
-                    onClick={() => handleSelectPreAuthorizedAccount(acc)}
-                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
-                      acc.status === 'suspended'
-                        ? 'border-red-200 bg-red-50/50 hover:bg-red-50'
-                        : 'border-stone-200 hover:border-amber-400 hover:bg-amber-50/50'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-black text-sm text-stone-900 flex items-center gap-1.5">
-                        <span>{acc.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-stone-100 text-stone-600">
-                          {acc.role === 'super_admin' ? t.accountRoleSuperAdmin : t.accountRoleStaff}
-                        </span>
-                        {acc.status === 'suspended' && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-red-100 text-red-700">
-                            {t.accountStatusSuspended}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-stone-500">{acc.email}</div>
-                    </div>
-                    <span className="text-xs font-bold text-amber-800">
-                      {language === 'en' ? 'Sign In →' : '登入 →'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="border-t border-stone-100 pt-3">
-                <form onSubmit={handleCustomGoogleEmailSubmit} className="space-y-2">
-                  <label className="block text-xs font-bold text-stone-700">
-                    {language === 'en' ? 'Or enter your Google Email to register/login:' : '或直接輸入您的 Google 帳號 (Gmail)：'}
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      required
-                      placeholder="your.name@gmail.com"
-                      value={customGoogleEmail}
-                      onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                      className="flex-1 px-3 py-2 text-xs border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600"
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-stone-900 text-white text-xs font-black rounded-xl hover:bg-black"
-                    >
-                      {language === 'en' ? 'Enter' : '登入'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }

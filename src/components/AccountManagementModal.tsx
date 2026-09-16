@@ -345,9 +345,9 @@ export const AccountManagementModal: React.FC<AccountManagementModalProps> = ({
                         <button
                           onClick={() => handleToggleRole(acc)}
                           className="px-2.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                          title={language === 'en' ? 'Change Role' : '切換組長/總護持角色'}
+                          title={language === 'en' ? 'Change Role' : '切換組長/管理員角色'}
                         >
-                          {acc.role === 'super_admin' ? (language === 'en' ? 'Set Team Leader' : '改為組長') : (language === 'en' ? 'Set Chief' : '設為總護持')}
+                          {acc.role === 'super_admin' ? (language === 'en' ? 'Set Team Leader' : '改為組長') : (language === 'en' ? 'Set Admin' : '設為系統管理員')}
                         </button>
                       )}
 

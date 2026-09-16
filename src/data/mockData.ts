@@ -15,7 +15,7 @@ export const INITIAL_ADMIN_ACCOUNTS: AdminAccount[] = [
   {
     id: 'admin-super-1',
     email: 'houtacheng@gmail.com',
-    name: '系統總護持',
+    name: '系統管理員',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
     role: 'super_admin',
     status: 'active',

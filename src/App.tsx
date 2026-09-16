@@ -63,9 +63,9 @@ function AppContent() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && (parsed.name === '系統總幹事' || parsed.note?.includes('總幹事'))) {
-          parsed.name = '系統總護持';
-          if (parsed.note) parsed.note = parsed.note.replace('總幹事', '總護持');
+        if (parsed && (parsed.name === '系統總幹事' || parsed.name === '系統總護持' || parsed.note?.includes('總幹事') || parsed.note?.includes('總護持'))) {
+          parsed.name = '系統管理員';
+          if (parsed.note) parsed.note = parsed.note.replace('總幹事', '管理員').replace('總護持', '管理員');
           localStorage.setItem('kongshan_current_admin_user_v2', JSON.stringify(parsed));
         }
         return parsed;
