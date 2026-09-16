@@ -115,7 +115,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [elderlyPoint, setElderlyPoint] = useState('');
   const [elderlyCount, setElderlyCount] = useState(1);
   const [elderlyOutboundRole, setElderlyOutboundRole] = useState<ParticipantRole>('volunteer');
-  const [elderlyReturnRole, setElderlyReturnRole] = useState<ParticipantRole>('attendee');
+  const [elderlyReturnRole, setElderlyReturnRole] = useState<ParticipantRole>('volunteer');
   const [elderlyNotes, setElderlyNotes] = useState('');
 
   // Admin Editing Request State
@@ -129,7 +129,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [adminEditReqNeedOutbound, setAdminEditReqNeedOutbound] = useState(true);
   const [adminEditReqOutboundRole, setAdminEditReqOutboundRole] = useState<ParticipantRole>('volunteer');
   const [adminEditReqNeedReturn, setAdminEditReqNeedReturn] = useState(true);
-  const [adminEditReqReturnRole, setAdminEditReqReturnRole] = useState<ParticipantRole>('attendee');
+  const [adminEditReqReturnRole, setAdminEditReqReturnRole] = useState<ParticipantRole>('volunteer');
   const [adminEditReqNotes, setAdminEditReqNotes] = useState('');
 
   const handleOpenAdminEditRequest = (req: RideRequest) => {
@@ -1559,11 +1559,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </label>
                   <select
                     value={elderlyOutboundRole}
-                    onChange={(e) => setElderlyOutboundRole(e.target.value as ParticipantRole)}
+                    onChange={(e) => {
+                      const val = e.target.value as ParticipantRole;
+                      setElderlyOutboundRole(val);
+                      setElderlyReturnRole(val);
+                    }}
                     className="w-full px-2.5 py-2 border border-stone-300 rounded-lg text-xs font-bold"
                   >
-                    <option value="volunteer">{language === 'en' ? 'Volunteer (Early service)' : language === 'zh-CN' ? '义工组（早到服务）' : '義工組（早到服務）'}</option>
-                    <option value="attendee">{language === 'en' ? 'Attendee (Event only)' : language === 'zh-CN' ? '正行组（参加活动）' : '正行組（參加活動）'}</option>
+                    <option value="volunteer">{language === 'en' ? 'Volunteer' : language === 'zh-CN' ? '义工组' : '義工組'}</option>
+                    <option value="attendee">{language === 'en' ? 'Attendee' : language === 'zh-CN' ? '正行组' : '正行組'}</option>
                   </select>
                 </div>
 
@@ -1576,8 +1580,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     onChange={(e) => setElderlyReturnRole(e.target.value as ParticipantRole)}
                     className="w-full px-2.5 py-2 border border-stone-300 rounded-lg text-xs font-bold"
                   >
-                    <option value="attendee">{language === 'en' ? 'Attendee (Depart after event)' : language === 'zh-CN' ? '正行组（活动结束回）' : '正行組（活動結束回）'}</option>
-                    <option value="volunteer">{language === 'en' ? 'Volunteer (Depart after cleanup)' : language === 'zh-CN' ? '义工组（善后完毕回）' : '義工組（善後完畢回）'}</option>
+                    <option value="volunteer">{language === 'en' ? 'Volunteer' : language === 'zh-CN' ? '义工组' : '義工組'}</option>
+                    <option value="attendee">{language === 'en' ? 'Attendee' : language === 'zh-CN' ? '正行组' : '正行組'}</option>
                   </select>
                 </div>
               </div>
@@ -1722,11 +1726,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   {adminEditReqNeedOutbound && (
                     <select
                       value={adminEditReqOutboundRole}
-                      onChange={(e) => setAdminEditReqOutboundRole(e.target.value as ParticipantRole)}
+                      onChange={(e) => {
+                        const val = e.target.value as ParticipantRole;
+                        setAdminEditReqOutboundRole(val);
+                        setAdminEditReqReturnRole(val);
+                      }}
                       className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
                     >
-                      <option value="volunteer">{language === 'en' ? 'Volunteer (Early)' : language === 'zh-CN' ? '义工 (早到)' : '義工 (早到)'}</option>
-                      <option value="attendee">{language === 'en' ? 'Attendee' : language === 'zh-CN' ? '正行' : '正行'}</option>
+                      <option value="volunteer">{language === 'en' ? 'Volunteer' : language === 'zh-CN' ? '义工组' : '義工組'}</option>
+                      <option value="attendee">{language === 'en' ? 'Attendee' : language === 'zh-CN' ? '正行组' : '正行組'}</option>
                     </select>
                   )}
                 </div>
@@ -1747,8 +1755,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       onChange={(e) => setAdminEditReqReturnRole(e.target.value as ParticipantRole)}
                       className="text-xs border border-stone-300 rounded px-2 py-1 font-bold"
                     >
-                      <option value="attendee">{language === 'en' ? 'Attendee (After event)' : language === 'zh-CN' ? '正行 (活动后即回)' : '正行 (活動後即回)'}</option>
-                      <option value="volunteer">{language === 'en' ? 'Volunteer (Cleanup)' : language === 'zh-CN' ? '义工 (善后)' : '義工 (善後)'}</option>
+                      <option value="volunteer">{language === 'en' ? 'Volunteer' : language === 'zh-CN' ? '义工组' : '義工組'}</option>
+                      <option value="attendee">{language === 'en' ? 'Attendee' : language === 'zh-CN' ? '正行组' : '正行組'}</option>
                     </select>
                   )}
                 </div>

@@ -184,6 +184,7 @@ export interface TranslationDictionary {
   driverReturnOptionAtt: string;
   driverReturnOptionVol: string;
   driverReturnOptionBoth: string;
+  syncWithOutbound: string;
   driverOutboundDepartureLabel: string;
   driverReturnDepartureLabel: string;
   driverEmptySeatsSuffix: string;

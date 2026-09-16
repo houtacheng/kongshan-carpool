@@ -76,7 +76,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
   const [bookOutbound, setBookOutbound] = useState(true);
   const [outboundRole, setOutboundRole] = useState<ParticipantRole>('volunteer');
   const [bookReturn, setBookReturn] = useState(true);
-  const [returnRole, setReturnRole] = useState<ParticipantRole>('attendee');
+  const [returnRole, setReturnRole] = useState<ParticipantRole>('volunteer');
   const [pickupNote, setPickupNote] = useState('');
   const [bookingSuccessInfo, setBookingSuccessInfo] = useState<{
     driverName: string;
@@ -97,7 +97,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
   const [reqNeedOutbound, setReqNeedOutbound] = useState(true);
   const [reqOutboundRole, setReqOutboundRole] = useState<ParticipantRole>('volunteer');
   const [reqNeedReturn, setReqNeedReturn] = useState(true);
-  const [reqReturnRole, setReqReturnRole] = useState<ParticipantRole>('attendee');
+  const [reqReturnRole, setReqReturnRole] = useState<ParticipantRole>('volunteer');
   const [reqNotes, setReqNotes] = useState('');
   const [requestSubmitted, setRequestSubmitted] = useState(false);
 
@@ -204,9 +204,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
     setSeatCount(1);
     setPickupNote('');
     setBookOutbound(offer.hasOutbound && offer.outboundAvailableSeats > 0);
-    setOutboundRole(offer.outboundMode === 'attendee' ? 'attendee' : 'volunteer');
+    const initialRole: ParticipantRole = offer.outboundMode === 'attendee' ? 'attendee' : 'volunteer';
+    setOutboundRole(initialRole);
     setBookReturn(offer.hasReturn && offer.returnAvailableSeats > 0);
-    setReturnRole(offer.returnMode === 'volunteer' ? 'volunteer' : 'attendee');
+    setReturnRole(offer.returnMode === 'attendee' ? 'attendee' : (offer.returnMode === 'volunteer' ? 'volunteer' : initialRole));
   };
 
   const handleSubmitBooking = (e: React.FormEvent) => {
@@ -937,7 +938,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                             type="radio"
                             name="outboundRole"
                             checked={outboundRole === 'volunteer'}
-                            onChange={() => setOutboundRole('volunteer')}
+                            onChange={() => {
+                              setOutboundRole('volunteer');
+                              setReturnRole('volunteer');
+                            }}
                             className="w-4 h-4 text-amber-600"
                           />
                           <span className="text-orange-900 font-bold">{t.roleVolunteerEarly}</span>
@@ -947,7 +951,10 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                             type="radio"
                             name="outboundRole"
                             checked={outboundRole === 'attendee'}
-                            onChange={() => setOutboundRole('attendee')}
+                            onChange={() => {
+                              setOutboundRole('attendee');
+                              setReturnRole('attendee');
+                            }}
                             className="w-4 h-4 text-amber-600"
                           />
                           <span className="text-emerald-900 font-bold">{t.roleAttendeeRegular}</span>
@@ -987,21 +994,21 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                           <input
                             type="radio"
                             name="returnRole"
-                            checked={returnRole === 'attendee'}
-                            onChange={() => setReturnRole('attendee')}
-                            className="w-4 h-4 text-amber-600"
-                          />
-                          <span className="text-emerald-900 font-bold">{t.roleAttendeeReturn}</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="returnRole"
                             checked={returnRole === 'volunteer'}
                             onChange={() => setReturnRole('volunteer')}
                             className="w-4 h-4 text-amber-600"
                           />
                           <span className="text-orange-900 font-bold">{t.roleVolunteerReturn}</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="returnRole"
+                            checked={returnRole === 'attendee'}
+                            onChange={() => setReturnRole('attendee')}
+                            className="w-4 h-4 text-amber-600"
+                          />
+                          <span className="text-emerald-900 font-bold">{t.roleAttendeeReturn}</span>
                         </label>
                       </div>
                     )}
@@ -1301,11 +1308,15 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     {reqNeedOutbound && (
                       <select
                         value={reqOutboundRole}
-                        onChange={(e) => setReqOutboundRole(e.target.value as ParticipantRole)}
+                        onChange={(e) => {
+                          const val = e.target.value as ParticipantRole;
+                          setReqOutboundRole(val);
+                          setReqReturnRole(val);
+                        }}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
-                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
+                        <option value="volunteer">{t.roleVolunteer}</option>
+                        <option value="attendee">{t.roleAttendee}</option>
                       </select>
                     )}
                   </div>
@@ -1328,8 +1339,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setReqReturnRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
-                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
+                        <option value="volunteer">{t.roleVolunteer}</option>
+                        <option value="attendee">{t.roleAttendee}</option>
                       </select>
                     )}
                   </div>
@@ -1505,8 +1516,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setEditReqOutboundRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
-                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
+                        <option value="volunteer">{t.roleVolunteer}</option>
+                        <option value="attendee">{t.roleAttendee}</option>
                       </select>
                     )}
                   </div>
@@ -1529,8 +1540,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                         onChange={(e) => setEditReqReturnRole(e.target.value as ParticipantRole)}
                         className="text-xs md:text-sm border border-stone-300 rounded-lg px-2.5 py-1.5 font-bold"
                       >
-                        <option value="attendee">{t.roleAttendee} ({t.roleAttendeeDesc})</option>
-                        <option value="volunteer">{t.roleVolunteer} ({t.roleVolunteerDesc})</option>
+                        <option value="volunteer">{t.roleVolunteer}</option>
+                        <option value="attendee">{t.roleAttendee}</option>
                       </select>
                     )}
                   </div>

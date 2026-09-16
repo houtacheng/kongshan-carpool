@@ -68,7 +68,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
   const [editOutboundTotalSeats, setEditOutboundTotalSeats] = useState(4);
   const [editHasReturn, setEditHasReturn] = useState(true);
   const [editReturnTime, setEditReturnTime] = useState('');
-  const [editReturnMode, setEditReturnMode] = useState<'volunteer' | 'attendee' | 'both'>('attendee');
+  const [editReturnMode, setEditReturnMode] = useState<'volunteer' | 'attendee' | 'both'>('volunteer');
   const [editReturnTotalSeats, setEditReturnTotalSeats] = useState(4);
   const [editOfferSuccess, setEditOfferSuccess] = useState('');
 
@@ -141,7 +141,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
   // Return configs
   const [hasReturn, setHasReturn] = useState(true);
   const [returnTime, setReturnTime] = useState(language === 'en' ? '16:30 After event' : '16:30 活動結束後返回');
-  const [returnMode, setReturnMode] = useState<'volunteer' | 'attendee' | 'both'>('attendee');
+  const [returnMode, setReturnMode] = useState<'volunteer' | 'attendee' | 'both'>('volunteer');
   const [returnTotalSeats, setReturnTotalSeats] = useState(4);
 
   const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -421,15 +421,29 @@ export const DriverView: React.FC<DriverViewProps> = ({
 
             {/* Return Leg Settings */}
             <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-3">
-              <label className="flex items-center gap-2.5 cursor-pointer font-bold text-stone-900 text-sm md:text-base">
-                <input
-                  type="checkbox"
-                  checked={hasReturn}
-                  onChange={(e) => setHasReturn(e.target.checked)}
-                  className="w-5 h-5 text-amber-600 rounded border-stone-300 focus:ring-amber-500 cursor-pointer"
-                />
-                <span>{t.driverOfferReturn}</span>
-              </label>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="flex items-center gap-2.5 cursor-pointer font-bold text-stone-900 text-sm md:text-base">
+                  <input
+                    type="checkbox"
+                    checked={hasReturn}
+                    onChange={(e) => setHasReturn(e.target.checked)}
+                    className="w-5 h-5 text-amber-600 rounded border-stone-300 focus:ring-amber-500 cursor-pointer"
+                  />
+                  <span>{t.driverOfferReturn}</span>
+                </label>
+                {hasReturn && hasOutbound && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReturnMode(outboundMode);
+                      setReturnTotalSeats(outboundTotalSeats);
+                    }}
+                    className="text-xs text-amber-800 hover:text-amber-950 font-bold bg-amber-100/70 hover:bg-amber-200/80 px-2.5 py-1 rounded-lg border border-amber-300 transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <span>{t.syncWithOutbound}</span>
+                  </button>
+                )}
+              </div>
 
               {hasReturn && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -440,8 +454,8 @@ export const DriverView: React.FC<DriverViewProps> = ({
                       onChange={(e) => setReturnMode(e.target.value as any)}
                       className="w-full px-3 py-2 text-xs md:text-sm border border-stone-300 rounded-xl bg-white font-medium"
                     >
-                      <option value="attendee">{t.driverReturnOptionAtt}</option>
                       <option value="volunteer">{t.driverReturnOptionVol}</option>
+                      <option value="attendee">{t.driverReturnOptionAtt}</option>
                       <option value="both">{t.driverReturnOptionBoth}</option>
                     </select>
                   </div>
@@ -1026,8 +1040,8 @@ export const DriverView: React.FC<DriverViewProps> = ({
                           onChange={(e) => setEditReturnMode(e.target.value as any)}
                           className="w-full px-2.5 py-1.5 border border-stone-300 rounded-lg text-xs font-bold"
                         >
-                          <option value="attendee">{t.roleAttendee}</option>
                           <option value="volunteer">{t.roleVolunteer}</option>
+                          <option value="attendee">{t.roleAttendee}</option>
                           <option value="both">{t.roleBoth}</option>
                         </select>
                       </div>
