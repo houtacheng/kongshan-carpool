@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Event, CarpoolOffer, RideRequest, ParticipantRole, AdminAccount } from './types';
-import { INITIAL_EVENTS, INITIAL_OFFERS, INITIAL_REQUESTS, INITIAL_ADMIN_ACCOUNTS } from './data/mockData';
+import { INITIAL_EVENTS, INITIAL_ADMIN_ACCOUNTS } from './data/mockData';
 import { Header } from './components/Header';
 import { PassengerView } from './components/PassengerView';
 import { DriverView } from './components/DriverView';
@@ -50,7 +50,10 @@ function AppContent() {
     const saved = localStorage.getItem('kongshan_admin_accounts_v2');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((acc: AdminAccount) => acc.id !== 'admin-staff-1' && acc.id !== 'admin-staff-2');
+        }
       } catch (e) {
         console.error('Failed to parse saved admin accounts', e);
       }
@@ -76,29 +79,35 @@ function AppContent() {
     return null;
   });
 
-  // Offers and Requests State
+  // Offers and Requests State (production: starts empty, synced with Firestore)
   const [offers, setOffers] = useState<CarpoolOffer[]>(() => {
     const saved = localStorage.getItem('kongshan_carpool_offers_v2');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((o: CarpoolOffer) => !o.id.startsWith('offer-flushing-') && !o.id.startsWith('offer-chinatown-') && !o.id.startsWith('offer-nj-') && !o.id.startsWith('offer-bk-'));
+        }
       } catch (e) {
         console.error('Failed to parse saved offers', e);
       }
     }
-    return INITIAL_OFFERS;
+    return [];
   });
 
   const [requests, setRequests] = useState<RideRequest[]>(() => {
     const saved = localStorage.getItem('kongshan_carpool_requests_v2');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((r: RideRequest) => !r.id.startsWith('req-1') && !r.id.startsWith('req-2'));
+        }
       } catch (e) {
         console.error('Failed to parse saved requests', e);
       }
     }
-    return INITIAL_REQUESTS;
+    return [];
   });
 
   // Real-time Cloud Sync with Firebase Firestore
@@ -662,16 +671,6 @@ function AppContent() {
     handleDeleteRequest(requestId);
   };
 
-  // Reset to initial mock data
-  const handleResetData = () => {
-    if (confirm(t.resetConfirmPrompt)) {
-      localStorage.removeItem('kongshan_carpool_offers_v2');
-      localStorage.removeItem('kongshan_carpool_requests_v2');
-      setOffers(INITIAL_OFFERS);
-      setRequests(INITIAL_REQUESTS);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-stone-50/70 flex flex-col justify-between">
       <div>
@@ -681,7 +680,6 @@ function AppContent() {
           events={events}
           selectedEventId={selectedEventId}
           setSelectedEventId={setSelectedEventId}
-          onResetData={handleResetData}
         />
 
         <main className="max-w-5xl mx-auto px-4 pt-6">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Car, Users, ClipboardCheck, RotateCcw, MapPin, Calendar, Globe } from 'lucide-react';
+import { Car, Users, ClipboardCheck, MapPin, Calendar, Globe } from 'lucide-react';
 import type { Event } from '../types';
 import { getLocalizedEvent } from '../data/mockData';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -11,7 +11,6 @@ interface HeaderProps {
   events: Event[];
   selectedEventId: string;
   setSelectedEventId: (id: string) => void;
-  onResetData: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,7 +19,6 @@ export const Header: React.FC<HeaderProps> = ({
   events,
   selectedEventId,
   setSelectedEventId,
-  onResetData,
 }) => {
   const { language, setLanguage, t } = useLanguage();
 
@@ -58,15 +56,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               ))}
             </div>
-
-            <button
-              onClick={onResetData}
-              title={t.resetDemoData}
-              className="flex items-center gap-1 text-amber-200 hover:text-white transition-colors cursor-pointer py-1 px-2 rounded-md hover:bg-stone-800/80 text-xs font-medium"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>{t.resetDemoData}</span>
-            </button>
           </div>
         </div>
       </div>
