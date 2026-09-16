@@ -1,21 +1,21 @@
 import { useState, useEffect } from 'react';
-import type { Event, CarpoolOffer, RideRequest } from './types';
+import type { Event, CarpoolOffer, RideRequest, ParticipantRole } from './types';
 import { INITIAL_EVENTS, INITIAL_OFFERS, INITIAL_REQUESTS } from './data/mockData';
 import { Header } from './components/Header';
 import { PassengerView } from './components/PassengerView';
 import { DriverView } from './components/DriverView';
 import { AdminView } from './components/AdminView';
-import { Sparkles } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 
 
 export function App() {
-  // Persistence with localStorage
   const [events] = useState<Event[]>(INITIAL_EVENTS);
   const [selectedEventId, setSelectedEventId] = useState<string>(INITIAL_EVENTS[0].id);
   const [currentTab, setCurrentTab] = useState<'passenger' | 'driver' | 'admin'>('passenger');
 
+  // Persistence with localStorage
   const [offers, setOffers] = useState<CarpoolOffer[]>(() => {
-    const saved = localStorage.getItem('temple_carpool_offers');
+    const saved = localStorage.getItem('kongshan_carpool_offers_v2');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -27,7 +27,7 @@ export function App() {
   });
 
   const [requests, setRequests] = useState<RideRequest[]>(() => {
-    const saved = localStorage.getItem('temple_carpool_requests');
+    const saved = localStorage.getItem('kongshan_carpool_requests_v2');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -39,43 +39,78 @@ export function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('temple_carpool_offers', JSON.stringify(offers));
+    localStorage.setItem('kongshan_carpool_offers_v2', JSON.stringify(offers));
   }, [offers]);
 
   useEffect(() => {
-    localStorage.setItem('temple_carpool_requests', JSON.stringify(requests));
+    localStorage.setItem('kongshan_carpool_requests_v2', JSON.stringify(requests));
   }, [requests]);
 
   const currentEvent = events.find((e) => e.id === selectedEventId) || events[0];
 
-  // Action: Passenger books seat directly
+  // Action: Passenger books seat (decoupled outbound / return)
   const handleBookSeat = (
     offerId: string,
     passengerName: string,
     passengerPhone: string,
+    wechatOrLine: string,
     count: number,
+    bookOutbound: boolean,
+    outboundRole: ParticipantRole,
+    bookReturn: boolean,
+    returnRole: ParticipantRole,
     note: string
   ): boolean => {
     const targetOffer = offers.find((o) => o.id === offerId);
-    if (!targetOffer || targetOffer.availableSeats < count) {
-      return false;
-    }
+    if (!targetOffer) return false;
+
+    if (bookOutbound && targetOffer.outboundAvailableSeats < count) return false;
+    if (bookReturn && targetOffer.returnAvailableSeats < count) return false;
 
     setOffers((prevOffers) =>
       prevOffers.map((offer) => {
         if (offer.id === offerId) {
-          const newPassenger = {
-            id: `p-${Date.now()}`,
-            name: passengerName,
-            phone: passengerPhone,
-            passengerCount: count,
-            pickupNote: note,
-            bookedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-          };
+          const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
+          let newOutboundPassengers = [...offer.outboundPassengers];
+          let newOutboundAvailable = offer.outboundAvailableSeats;
+
+          if (bookOutbound) {
+            newOutboundPassengers.push({
+              id: `p-out-${Date.now()}`,
+              name: passengerName,
+              phone: passengerPhone,
+              wechatOrLine,
+              passengerCount: count,
+              role: outboundRole,
+              pickupNote: note,
+              bookedAt: nowStr,
+            });
+            newOutboundAvailable -= count;
+          }
+
+          let newReturnPassengers = [...offer.returnPassengers];
+          let newReturnAvailable = offer.returnAvailableSeats;
+
+          if (bookReturn) {
+            newReturnPassengers.push({
+              id: `p-ret-${Date.now()}`,
+              name: passengerName,
+              phone: passengerPhone,
+              wechatOrLine,
+              passengerCount: count,
+              role: returnRole,
+              pickupNote: note,
+              bookedAt: nowStr,
+            });
+            newReturnAvailable -= count;
+          }
+
           return {
             ...offer,
-            availableSeats: offer.availableSeats - count,
-            passengers: [...offer.passengers, newPassenger],
+            outboundAvailableSeats: newOutboundAvailable,
+            outboundPassengers: newOutboundPassengers,
+            returnAvailableSeats: newReturnAvailable,
+            returnPassengers: newReturnPassengers,
           };
         }
         return offer;
@@ -86,12 +121,15 @@ export function App() {
   };
 
   // Action: Driver / Admin creates an offer
-  const handleCreateOffer = (newOfferData: Omit<CarpoolOffer, 'id' | 'createdAt' | 'passengers'>) => {
+  const handleCreateOffer = (
+    newOfferData: Omit<CarpoolOffer, 'id' | 'createdAt' | 'outboundPassengers' | 'returnPassengers'>
+  ) => {
     const newOffer: CarpoolOffer = {
       ...newOfferData,
       id: `offer-${Date.now()}`,
       createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-      passengers: [],
+      outboundPassengers: [],
+      returnPassengers: [],
     };
     setOffers((prev) => [newOffer, ...prev]);
   };
@@ -112,32 +150,68 @@ export function App() {
     setRequests((prev) => [newReq, ...prev]);
   };
 
-  // Action: Match pending request to an offer (Driver or Admin)
-  const handleMatchRequestToOffer = (requestId: string, offerId: string): boolean => {
+  // Action: Match request to offer (with leg selection)
+  const handleMatchRequestToOffer = (
+    requestId: string,
+    offerId: string,
+    leg: 'outbound' | 'return' | 'both'
+  ): boolean => {
     const req = requests.find((r) => r.id === requestId);
     const offer = offers.find((o) => o.id === offerId);
-    if (!req || !offer || offer.availableSeats < req.passengerCount) {
-      return false;
-    }
+    if (!req || !offer) return false;
+
+    const needOut = (leg === 'outbound' || leg === 'both') && req.needOutbound;
+    const needRet = (leg === 'return' || leg === 'both') && req.needReturn;
+
+    if (needOut && offer.outboundAvailableSeats < req.passengerCount) return false;
+    if (needRet && offer.returnAvailableSeats < req.passengerCount) return false;
+
+    const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
 
     // 1. Update Offer
     setOffers((prev) =>
       prev.map((o) => {
         if (o.id === offerId) {
+          let updatedOutboundPassengers = [...o.outboundPassengers];
+          let updatedOutboundSeats = o.outboundAvailableSeats;
+
+          if (needOut) {
+            updatedOutboundPassengers.push({
+              id: `p-out-${Date.now()}`,
+              name: req.passengerName,
+              phone: req.passengerPhone,
+              wechatOrLine: req.wechatOrLine,
+              passengerCount: req.passengerCount,
+              role: req.outboundRole,
+              pickupNote: `${req.pickupArea} ${req.pickupPoint} ${req.notes ? `(${req.notes})` : ''}`,
+              bookedAt: nowStr,
+            });
+            updatedOutboundSeats -= req.passengerCount;
+          }
+
+          let updatedReturnPassengers = [...o.returnPassengers];
+          let updatedReturnSeats = o.returnAvailableSeats;
+
+          if (needRet) {
+            updatedReturnPassengers.push({
+              id: `p-ret-${Date.now()}`,
+              name: req.passengerName,
+              phone: req.passengerPhone,
+              wechatOrLine: req.wechatOrLine,
+              passengerCount: req.passengerCount,
+              role: req.returnRole,
+              pickupNote: `${req.pickupArea} ${req.pickupPoint} ${req.notes ? `(${req.notes})` : ''}`,
+              bookedAt: nowStr,
+            });
+            updatedReturnSeats -= req.passengerCount;
+          }
+
           return {
             ...o,
-            availableSeats: o.availableSeats - req.passengerCount,
-            passengers: [
-              ...o.passengers,
-              {
-                id: `p-${Date.now()}`,
-                name: req.passengerName,
-                phone: req.passengerPhone,
-                passengerCount: req.passengerCount,
-                pickupNote: `${req.pickupCity}${req.pickupDistrict} ${req.pickupPoint} ${req.notes ? `(${req.notes})` : ''}`,
-                bookedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-              },
-            ],
+            outboundAvailableSeats: updatedOutboundSeats,
+            outboundPassengers: updatedOutboundPassengers,
+            returnAvailableSeats: updatedReturnSeats,
+            returnPassengers: updatedReturnPassengers,
           };
         }
         return o;
@@ -148,10 +222,12 @@ export function App() {
     setRequests((prev) =>
       prev.map((r) => {
         if (r.id === requestId) {
+          const isFullyMatched = leg === 'both' || (!r.needOutbound && leg === 'return') || (!r.needReturn && leg === 'outbound');
           return {
             ...r,
-            status: 'matched',
-            matchedOfferId: offerId,
+            status: isFullyMatched ? 'matched_full' : 'matched_partial',
+            matchedOutboundOfferId: needOut ? offerId : r.matchedOutboundOfferId,
+            matchedReturnOfferId: needRet ? offerId : r.matchedReturnOfferId,
           };
         }
         return r;
@@ -161,11 +237,11 @@ export function App() {
     return true;
   };
 
-  // Action: Reset data to initial mock
+  // Reset to initial mock data
   const handleResetData = () => {
-    if (confirm('確定要還原所有共乘展示資料為初始狀態嗎？')) {
-      localStorage.removeItem('temple_carpool_offers');
-      localStorage.removeItem('temple_carpool_requests');
+    if (confirm('確定要還原空山寺中秋法會的展示資料為初始狀態嗎？')) {
+      localStorage.removeItem('kongshan_carpool_offers_v2');
+      localStorage.removeItem('kongshan_carpool_requests_v2');
       setOffers(INITIAL_OFFERS);
       setRequests(INITIAL_REQUESTS);
     }
@@ -220,12 +296,15 @@ export function App() {
 
       {/* Footer */}
       <footer className="border-t border-stone-200 bg-white py-6 text-center text-xs text-stone-500 space-y-2 mt-12">
-        <div className="flex items-center justify-center gap-1.5 font-medium text-stone-700">
-          <Sparkles className="w-4 h-4 text-amber-600" />
-          <span>蓮華淨苑 • 法會共乘媒合服務網</span>
+        <div className="flex items-center justify-center gap-2 font-bold text-stone-800">
+          <img src="/kongshan_logo.png" alt="空山" className="w-5 h-5 object-contain bg-black rounded" />
+          <span>空山寺 (Kong Shan Temple) • 美東中秋法會共乘服務網</span>
         </div>
-        <p className="text-stone-400">
-          隨喜大眾發心護持 • 同車同行 共結菩提清淨法緣 • 南無阿彌陀佛
+        <p className="text-stone-400 flex items-center justify-center gap-1">
+          <MapPin className="w-3.5 h-3.5 text-amber-700" />
+          <span>174 Hynes RD, Poughquag, NY 12570</span>
+          <span>•</span>
+          <span>隨喜十方大德護持發心 • 同車同行 共赴菩提法筵 • 阿彌陀佛</span>
         </p>
       </footer>
     </div>

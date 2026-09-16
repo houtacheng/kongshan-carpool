@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import type { Event, CarpoolOffer, RideRequest } from '../types';
+import type { Event, CarpoolOffer, RideRequest, ParticipantRole } from '../types';
+import { EAST_COAST_AREAS } from '../data/mockData';
 import {
   MapPin,
   Clock,
@@ -12,15 +13,27 @@ import {
   ShieldCheck,
   Calendar,
   Sparkles,
-  Info
+  Info,
+  Sun,
+  Flame
 } from 'lucide-react';
-
 
 interface PassengerViewProps {
   currentEvent: Event;
   offers: CarpoolOffer[];
   requests: RideRequest[];
-  onBookSeat: (offerId: string, passengerName: string, passengerPhone: string, count: number, note: string) => boolean;
+  onBookSeat: (
+    offerId: string,
+    passengerName: string,
+    passengerPhone: string,
+    wechatOrLine: string,
+    count: number,
+    bookOutbound: boolean,
+    outboundRole: ParticipantRole,
+    bookReturn: boolean,
+    returnRole: ParticipantRole,
+    note: string
+  ) => boolean;
   onCreateRequest: (request: Omit<RideRequest, 'id' | 'createdAt' | 'status'>) => void;
 }
 
@@ -31,49 +44,79 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
   onBookSeat,
   onCreateRequest,
 }) => {
-  const pendingRequestsCount = requests.filter(
-    (r) => r.eventId === currentEvent.id && r.status === 'pending'
-  ).length;
-  const [selectedCity, setSelectedCity] = useState<string>('all');
+  // Filters
+  const [selectedLeg, setSelectedLeg] = useState<'all' | 'outbound' | 'return'>('all');
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState<'all' | 'volunteer' | 'attendee'>('all');
+  const [selectedArea, setSelectedArea] = useState<string>('全美東區域');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
-  
+
   // Booking modal state
   const [bookingOffer, setBookingOffer] = useState<CarpoolOffer | null>(null);
-
   const [passengerName, setPassengerName] = useState('');
   const [passengerPhone, setPassengerPhone] = useState('');
+  const [wechatOrLine, setWechatOrLine] = useState('');
   const [seatCount, setSeatCount] = useState(1);
+  const [bookOutbound, setBookOutbound] = useState(true);
+  const [outboundRole, setOutboundRole] = useState<ParticipantRole>('volunteer');
+  const [bookReturn, setBookReturn] = useState(true);
+  const [returnRole, setReturnRole] = useState<ParticipantRole>('attendee');
   const [pickupNote, setPickupNote] = useState('');
   const [bookingSuccessInfo, setBookingSuccessInfo] = useState<{
     driverName: string;
     driverPhone: string;
-    departurePoint: string;
-    departureTime: string;
-    carModel: string;
+    wechatOrLine?: string;
+    pickupPoint: string;
+    details: string;
   } | null>(null);
 
-  // Request modal state (when no cars match)
+  // Request modal state
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [reqName, setReqName] = useState('');
   const [reqPhone, setReqPhone] = useState('');
-  const [reqCity, setReqCity] = useState('新北市');
-  const [reqDistrict, setReqDistrict] = useState('');
+  const [reqWechat, setReqWechat] = useState('');
+  const [reqArea, setReqArea] = useState('法拉盛 Flushing (NY)');
   const [reqPoint, setReqPoint] = useState('');
   const [reqCount, setReqCount] = useState(1);
+  const [reqNeedOutbound, setReqNeedOutbound] = useState(true);
+  const [reqOutboundRole, setReqOutboundRole] = useState<ParticipantRole>('volunteer');
+  const [reqNeedReturn, setReqNeedReturn] = useState(true);
+  const [reqReturnRole, setReqReturnRole] = useState<ParticipantRole>('attendee');
   const [reqNotes, setReqNotes] = useState('');
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+
+  const pendingRequestsCount = requests.filter(
+    (r) => r.eventId === currentEvent.id && r.status === 'pending'
+  ).length;
 
   // Filter offers
   const filteredOffers = offers.filter((offer) => {
     if (offer.eventId !== currentEvent.id) return false;
-    if (selectedCity !== 'all' && offer.departureCity !== selectedCity) return false;
+    
+    // Area filter
+    if (selectedArea !== '全美東區域' && offer.departureArea !== selectedArea) {
+      return false;
+    }
+
+    // Leg filter
+    if (selectedLeg === 'outbound' && !offer.hasOutbound) return false;
+    if (selectedLeg === 'return' && !offer.hasReturn) return false;
+
+    // Role filter
+    if (selectedRoleFilter !== 'all') {
+      const matchOutbound = offer.hasOutbound && (offer.outboundMode === selectedRoleFilter || offer.outboundMode === 'both');
+      const matchReturn = offer.hasReturn && (offer.returnMode === selectedRoleFilter || offer.returnMode === 'both');
+      if (!matchOutbound && !matchReturn) return false;
+    }
+
+    // Keyword search
     if (searchKeyword.trim()) {
       const kw = searchKeyword.toLowerCase();
       const matchSpot = offer.departurePoint.toLowerCase().includes(kw);
-      const matchDistrict = offer.departureDistrict.toLowerCase().includes(kw);
+      const matchArea = offer.departureArea.toLowerCase().includes(kw);
       const matchDriver = offer.driverName.toLowerCase().includes(kw);
-      if (!matchSpot && !matchDistrict && !matchDriver) return false;
+      if (!matchSpot && !matchArea && !matchDriver) return false;
     }
+
     return true;
   });
 
@@ -81,15 +124,25 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
     setBookingOffer(offer);
     setPassengerName('');
     setPassengerPhone('');
+    setWechatOrLine('');
     setSeatCount(1);
     setPickupNote('');
+    setBookOutbound(offer.hasOutbound && offer.outboundAvailableSeats > 0);
+    setOutboundRole(offer.outboundMode === 'attendee' ? 'attendee' : 'volunteer');
+    setBookReturn(offer.hasReturn && offer.returnAvailableSeats > 0);
+    setReturnRole(offer.returnMode === 'volunteer' ? 'volunteer' : 'attendee');
   };
 
   const handleSubmitBooking = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookingOffer) return;
     if (!passengerName.trim() || !passengerPhone.trim()) {
-      alert('請填寫搭乘者稱呼與聯絡電話');
+      alert('請填寫搭乘同修姓名與美東聯絡電話！');
+      return;
+    }
+
+    if (!bookOutbound && !bookReturn) {
+      alert('請至少勾選預約「去程」或「回程」車位！');
       return;
     }
 
@@ -97,28 +150,45 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
       bookingOffer.id,
       passengerName.trim(),
       passengerPhone.trim(),
+      wechatOrLine.trim(),
       seatCount,
+      bookOutbound,
+      outboundRole,
+      bookReturn,
+      returnRole,
       pickupNote.trim()
     );
 
     if (success) {
+      const parts = [];
+      if (bookOutbound) {
+        parts.push(`去程（${outboundRole === 'volunteer' ? '義工車' : '正行車'}）：${bookingOffer.outboundTime}`);
+      }
+      if (bookReturn) {
+        parts.push(`回程（${returnRole === 'volunteer' ? '義工車' : '正行車'}）：${bookingOffer.returnTime}`);
+      }
+
       setBookingSuccessInfo({
         driverName: bookingOffer.driverName,
         driverPhone: bookingOffer.driverPhone,
-        departurePoint: `${bookingOffer.departureCity}${bookingOffer.departureDistrict} - ${bookingOffer.departurePoint}`,
-        departureTime: bookingOffer.departureTime,
-        carModel: `${bookingOffer.carColor || ''} ${bookingOffer.carModel}`,
+        wechatOrLine: bookingOffer.wechatOrLine,
+        pickupPoint: `${bookingOffer.departureArea} - ${bookingOffer.departurePoint}`,
+        details: parts.join(' ｜ '),
       });
       setBookingOffer(null);
     } else {
-      alert('該車次剩餘座位不足，請選擇其他車次。');
+      alert('所選車次的剩餘空位不足，請調整人數或選擇其他車次。');
     }
   };
 
   const handleSubmitRequest = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reqName.trim() || !reqPhone.trim() || !reqDistrict.trim()) {
-      alert('請填寫完整稱呼、電話與希望上車地區');
+    if (!reqName.trim() || !reqPhone.trim()) {
+      alert('請填寫姓名與聯絡電話');
+      return;
+    }
+    if (!reqNeedOutbound && !reqNeedReturn) {
+      alert('請至少勾選需要「去程」或「回程」！');
       return;
     }
 
@@ -126,10 +196,14 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
       eventId: currentEvent.id,
       passengerName: reqName.trim(),
       passengerPhone: reqPhone.trim(),
-      pickupCity: reqCity,
-      pickupDistrict: reqDistrict.trim(),
-      pickupPoint: reqPoint.trim() || '配合車主鄰近地點',
+      wechatOrLine: reqWechat.trim() || undefined,
+      pickupArea: reqArea,
+      pickupPoint: reqPoint.trim() || '配合車主集合點',
       passengerCount: reqCount,
+      needOutbound: reqNeedOutbound,
+      outboundRole: reqOutboundRole,
+      needReturn: reqNeedReturn,
+      returnRole: reqReturnRole,
       notes: reqNotes.trim(),
     });
 
@@ -139,9 +213,8 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
       setIsRequestModalOpen(false);
       setReqName('');
       setReqPhone('');
-      setReqDistrict('');
+      setReqWechat('');
       setReqPoint('');
-      setReqCount(1);
       setReqNotes('');
     }, 2000);
   };
@@ -149,229 +222,334 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* Event Info Card */}
-      <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 border border-amber-200/80 rounded-2xl p-5 shadow-xs">
+      <div className="bg-gradient-to-br from-amber-50 via-stone-50 to-orange-50/60 border border-amber-200/90 rounded-2xl p-5 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100/90 text-amber-800 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              當期法會活動
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-bold border border-amber-300/60">
+              <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+              美東道場 • 中秋殊勝法會
             </div>
-            <h2 className="text-xl md:text-2xl font-bold text-stone-900 tracking-tight">
-              {currentEvent.title}
+            <h2 className="text-xl md:text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
+              <span>{currentEvent.title}</span>
             </h2>
             <p className="text-sm text-stone-600 font-medium">{currentEvent.subtitle}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-2 text-xs md:text-sm text-stone-700 bg-white/80 p-3 rounded-xl border border-amber-100">
-            <div className="flex items-center gap-2">
+          <div className="space-y-1.5 text-xs md:text-sm text-stone-700 bg-white/90 p-3.5 rounded-xl border border-amber-200/80 shadow-2xs">
+            <div className="flex items-center gap-2 font-bold text-stone-900">
               <Calendar className="w-4 h-4 text-amber-700 shrink-0" />
-              <span><strong>日期：</strong>{currentEvent.date}</span>
+              <span>{currentEvent.date}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-700 shrink-0" />
-              <span><strong>集結：</strong>{currentEvent.assemblyTime}</span>
+            <div className="flex items-start gap-2">
+              <Clock className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-orange-800">義工集結：</span>
+                <span>{currentEvent.volunteerArrivalTime}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 sm:col-span-2 md:col-span-1">
-              <MapPin className="w-4 h-4 text-amber-700 shrink-0" />
-              <span><strong>地點：</strong>{currentEvent.templeName} ({currentEvent.location})</span>
+            <div className="flex items-start gap-2">
+              <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-amber-800">正行入座：</span>
+                <span>{currentEvent.attendeeArrivalTime}</span>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 pt-1 border-t border-stone-100 text-stone-600 text-xs">
+              <MapPin className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+              <span>{currentEvent.location}</span>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-amber-200/60 flex items-start gap-2 text-xs text-amber-900/80">
-          <Info className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-          <span>溫馨提醒：本共乘平台純屬同修義工互助發心結緣，不收取任何車資費用。請準時至集合點等候，感恩您的配合！</span>
+        {/* Highlight Banner on Volunteer vs Attendee decoupled rides */}
+        <div className="mt-4 pt-3 border-t border-amber-200/70 flex items-start gap-2 text-xs text-amber-950/80 bg-amber-100/50 p-2.5 rounded-xl">
+          <Info className="w-4 h-4 shrink-0 text-amber-700 mt-0.5" />
+          <div className="leading-relaxed">
+            <strong>靈活參與模式支援：</strong>
+            義工菩薩若需清晨前往大寮/壇場出坡，可<strong>單獨預約【義工車去程】</strong>；下午法會結束若需先回紐約，亦可<strong>分開預約【正行車回程】</strong>，請依照您的作息自由組合！
+          </div>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-        {/* City Filter Chips */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {[
-            { id: 'all', label: '全部區域' },
-            { id: '新北市', label: '新北市' },
-            { id: '台北市', label: '台北市' },
-            { id: '桃園市', label: '桃園市' },
-          ].map((item) => (
+      {/* Filter Toolbar */}
+      <div className="space-y-3 bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+        {/* Row 1: Leg Selector & Role Filter */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-3">
+          {/* Outbound vs Return Leg Filter */}
+          <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl text-xs font-semibold">
             <button
-              key={item.id}
-              onClick={() => setSelectedCity(item.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs md:text-sm font-medium transition-all cursor-pointer ${
-                selectedCity === item.id
-                  ? 'bg-amber-700 text-white shadow-xs'
-                  : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
+              onClick={() => setSelectedLeg('all')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                selectedLeg === 'all' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              {item.label}
+              全部行程
             </button>
-          ))}
-        </div>
-
-        {/* Search Input and Request Button */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 md:w-56">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input
-              type="text"
-              placeholder="搜尋捷運站或地名..."
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              className="w-full bg-white pl-9 pr-3 py-1.5 text-sm border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-            />
+            <button
+              onClick={() => setSelectedLeg('outbound')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                selectedLeg === 'outbound' ? 'bg-amber-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              🚙 前往寺院（去程）
+            </button>
+            <button
+              onClick={() => setSelectedLeg('return')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                selectedLeg === 'return' ? 'bg-amber-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              🚗 返回市區（回程）
+            </button>
           </div>
 
-          <button
-            onClick={() => setIsRequestModalOpen(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs md:text-sm font-semibold transition-colors cursor-pointer shrink-0 border border-orange-200"
-          >
-            <PlusCircle className="w-4 h-4 text-orange-700" />
-            <span>登記共乘需求 {pendingRequestsCount > 0 && `(${pendingRequestsCount})`}</span>
-          </button>
+          {/* Role Filter Chips */}
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-stone-400 font-medium">車次性質：</span>
+            <button
+              onClick={() => setSelectedRoleFilter('all')}
+              className={`px-2.5 py-1 rounded-lg font-medium cursor-pointer transition-colors ${
+                selectedRoleFilter === 'all'
+                  ? 'bg-stone-800 text-white'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              不限
+            </button>
+            <button
+              onClick={() => setSelectedRoleFilter('volunteer')}
+              className={`px-2.5 py-1 rounded-lg font-medium cursor-pointer flex items-center gap-1 transition-colors ${
+                selectedRoleFilter === 'volunteer'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100'
+              }`}
+            >
+              <Flame className="w-3 h-3" />
+              義工班次（早到/善後）
+            </button>
+            <button
+              onClick={() => setSelectedRoleFilter('attendee')}
+              className={`px-2.5 py-1 rounded-lg font-medium cursor-pointer flex items-center gap-1 transition-colors ${
+                selectedRoleFilter === 'attendee'
+                  ? 'bg-emerald-700 text-white'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              <Sun className="w-3 h-3" />
+              正行班次（共修參讚）
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: US East Coast Area Chips & Search */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {EAST_COAST_AREAS.map((area) => (
+              <button
+                key={area}
+                onClick={() => setSelectedArea(area)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                  selectedArea === area
+                    ? 'bg-amber-700 text-white shadow-2xs'
+                    : 'bg-stone-50 border border-stone-200 text-stone-700 hover:bg-stone-100'
+                }`}
+              >
+                {area}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 md:w-48">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input
+                type="text"
+                placeholder="搜尋地名、車主..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="w-full bg-stone-50 pl-8 pr-3 py-1 text-xs border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500 focus:bg-white"
+              />
+            </div>
+
+            <button
+              onClick={() => setIsRequestModalOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition-colors cursor-pointer shrink-0 border border-orange-200"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-orange-700" />
+              <span>登記搭車需求 {pendingRequestsCount > 0 && `(${pendingRequestsCount})`}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Available Rides List */}
+      {/* Carpool Offers Grid */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-base md:text-lg text-stone-800 flex items-center gap-2">
             <Car className="w-5 h-5 text-amber-700" />
-            目前可搭乘愛心車輛
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
-              共 {filteredOffers.length} 部車
+            美東發心愛心車次
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
+              共 {filteredOffers.length} 輛車
             </span>
           </h3>
-          <span className="text-xs text-stone-500">點擊「預約搭車」即可完成登記</span>
+          <span className="text-xs text-stone-500">可單獨預約去程或回程</span>
         </div>
 
         {filteredOffers.length === 0 ? (
           <div className="bg-white border border-dashed border-stone-300 rounded-2xl p-8 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
               <Car className="w-6 h-6" />
             </div>
-            <p className="text-stone-700 font-medium">該區域目前暫無開放中的車位</p>
+            <p className="text-stone-700 font-bold">該區域或時段目前暫無相應車位</p>
             <p className="text-xs text-stone-500 max-w-sm mx-auto">
-              您可以點擊下方按鈕登記您的搭乘需求，交通組義工或順路的車主看到後會主動為您協調媒合！
+              您可以點擊下方按鈕登記「搭乘需求」，註明您是義工或正行同修，交通組將為您協調美東車位！
             </p>
             <button
               onClick={() => setIsRequestModalOpen(true)}
-              className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold text-sm hover:bg-amber-700 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 transition-colors cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
-              登記我的搭乘需求
+              登記我的搭車需求
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredOffers.map((offer) => {
-              const isFull = offer.availableSeats <= 0;
+              const outboundFull = offer.hasOutbound && offer.outboundAvailableSeats <= 0;
+              const returnFull = offer.hasReturn && offer.returnAvailableSeats <= 0;
+              const totallyFull = (!offer.hasOutbound || outboundFull) && (!offer.hasReturn || returnFull);
+
               return (
                 <div
                   key={offer.id}
-                  className={`bg-white rounded-2xl border transition-all shadow-xs hover:shadow-md flex flex-col justify-between ${
-                    isFull ? 'border-stone-200 opacity-80' : 'border-amber-200/90'
+                  className={`bg-white rounded-2xl border transition-all shadow-xs hover:shadow-md flex flex-col justify-between overflow-hidden ${
+                    totallyFull ? 'border-stone-200 opacity-80' : 'border-amber-200'
                   }`}
                 >
                   <div className="p-4 space-y-3">
-                    {/* Card Top: Location & Time Badge */}
-                    <div className="flex items-start justify-between gap-2">
+                    {/* Header: Area & Driver */}
+                    <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-2.5">
                       <div>
-                        <div className="flex items-center gap-1.5 text-xs text-stone-500">
-                          <span className="px-2 py-0.5 rounded bg-stone-100 font-medium text-stone-700">
-                            {offer.departureCity} {offer.departureDistrict}
-                          </span>
-                          {offer.returnTrip ? (
-                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">
-                              去回雙程
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-600">
-                              僅去程
-                            </span>
-                          )}
+                        <div className="inline-block px-2.5 py-0.5 rounded-md bg-stone-100 text-stone-800 font-bold text-xs">
+                          📍 {offer.departureArea}
                         </div>
-                        <h4 className="text-base font-bold text-stone-900 mt-1 flex items-center gap-1">
-                          <MapPin className="w-4 h-4 text-amber-700 shrink-0" />
+                        <h4 className="text-sm md:text-base font-black text-stone-900 mt-1 flex items-center gap-1">
                           {offer.departurePoint}
                         </h4>
                       </div>
 
-                      {/* Seats Badge */}
-                      <div
-                        className={`shrink-0 px-2.5 py-1 rounded-xl text-xs font-bold text-center border ${
-                          isFull
-                            ? 'bg-stone-100 text-stone-500 border-stone-200'
-                            : 'bg-amber-50 text-amber-900 border-amber-300'
-                        }`}
-                      >
-                        {isFull ? (
-                          <span>已額滿</span>
-                        ) : (
-                          <>
-                            <div className="text-lg leading-none font-extrabold text-amber-700">
-                              {offer.availableSeats}
-                            </div>
-                            <div className="scale-85 text-[10px] text-amber-800">剩餘空位</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Schedule & Vehicle */}
-                    <div className="bg-stone-50/80 rounded-xl p-2.5 text-xs text-stone-700 space-y-1.5 border border-stone-100">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-3.5 h-3.5 text-stone-500 shrink-0" />
-                        <span><strong>出發時間：</strong>{offer.departureTime} 集合準時出發</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Car className="w-3.5 h-3.5 text-stone-500 shrink-0" />
-                        <span>
-                          <strong>車輛資訊：</strong>
-                          {offer.carColor || ''} {offer.carModel}
-                          {offer.plateNumber ? ` (${offer.plateNumber})` : ''}
-                        </span>
-                      </div>
-                      {offer.returnTrip && offer.returnTime && (
-                        <div className="text-stone-500 pl-5">
-                          回程：{offer.returnTime}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Driver & Notes */}
-                    <div className="text-xs text-stone-600 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-stone-800 flex items-center gap-1">
+                      <div className="text-right">
+                        <div className="font-bold text-stone-800 text-xs flex items-center justify-end gap-1">
                           <UserCheck className="w-3.5 h-3.5 text-amber-700" />
-                          車主：{offer.driverName}
-                        </span>
-                        <span className="text-[11px] text-stone-400">總座位 {offer.totalSeats} 席</span>
+                          <span>{offer.driverName}</span>
+                        </div>
+                        <div className="text-[11px] text-stone-500 mt-0.5">
+                          {offer.carColor || ''} {offer.carModel}
+                        </div>
                       </div>
-                      {offer.notes && (
-                        <p className="text-stone-500 bg-amber-50/50 p-2 rounded-lg border border-amber-100/50">
-                          {offer.notes}
-                        </p>
-                      )}
                     </div>
+
+                    {/* Leg 1: Outbound Info */}
+                    {offer.hasOutbound && (
+                      <div className="bg-amber-50/50 rounded-xl p-2.5 border border-amber-100/80 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold text-stone-900">
+                            <span className="px-1.5 py-0.5 rounded bg-amber-200/80 text-amber-900 text-[10px]">
+                              去程
+                            </span>
+                            <span>前往空山寺</span>
+                            {offer.outboundMode === 'volunteer' ? (
+                              <span className="px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+                                義工班次（早到）
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                正行班次
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="font-bold text-[11px]">
+                            {offer.outboundAvailableSeats > 0 ? (
+                              <span className="text-amber-800 font-black">
+                                剩 {offer.outboundAvailableSeats} / {offer.outboundTotalSeats} 位
+                              </span>
+                            ) : (
+                              <span className="text-stone-400">已額滿</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 text-stone-600 text-[11px]">
+                          <Clock className="w-3.5 h-3.5 text-amber-700" />
+                          <span>出發時間：<strong>{offer.outboundTime}</strong></span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Leg 2: Return Info */}
+                    {offer.hasReturn && (
+                      <div className="bg-stone-50 rounded-xl p-2.5 border border-stone-200/80 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold text-stone-900">
+                            <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-800 text-[10px]">
+                              回程
+                            </span>
+                            <span>返回 {offer.departureArea.split(' ')[0]}</span>
+                            {offer.returnMode === 'volunteer' ? (
+                              <span className="px-1.5 py-0.2 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+                                義工班次（善後賦歸）
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                正行班次（圓滿即回）
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="font-bold text-[11px]">
+                            {offer.returnAvailableSeats > 0 ? (
+                              <span className="text-emerald-700 font-black">
+                                剩 {offer.returnAvailableSeats} / {offer.returnTotalSeats} 位
+                              </span>
+                            ) : (
+                              <span className="text-stone-400">已額滿</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 text-stone-600 text-[11px]">
+                          <Clock className="w-3.5 h-3.5 text-stone-500" />
+                          <span>返程時間：<strong>{offer.returnTime}</strong></span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {offer.notes && (
+                      <p className="text-[11px] text-stone-500 bg-stone-50 p-2 rounded-lg leading-relaxed">
+                        {offer.notes}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Card Bottom: Action Button */}
-                  <div className="p-3 bg-stone-50 border-t border-stone-100 rounded-b-2xl">
+                  {/* Booking Trigger Button */}
+                  <div className="p-3 bg-stone-50/80 border-t border-stone-100 rounded-b-2xl">
                     <button
-                      disabled={isFull}
+                      disabled={totallyFull}
                       onClick={() => handleOpenBooking(offer)}
-                      className={`w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        isFull
+                      className={`w-full py-2.5 px-4 rounded-xl text-xs md:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        totallyFull
                           ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
                           : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
                       }`}
                     >
-                      {isFull ? (
-                        <span>座位已滿（可登記候補或另選車輛）</span>
+                      {totallyFull ? (
+                        <span>該車次已全數額滿</span>
                       ) : (
                         <>
                           <CheckCircle2 className="w-4 h-4" />
-                          <span>預約搭乘此車（尚餘 {offer.availableSeats} 位）</span>
+                          <span>預約此車位（可自選去程/回程）</span>
                         </>
                       )}
                     </button>
@@ -385,87 +563,206 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
       {/* Booking Modal */}
       {bookingOffer && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-stone-100 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="border-b border-stone-100 pb-3">
-              <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
+              <div>
                 <h3 className="text-lg font-bold text-stone-900">
-                  預約搭乘確認
+                  預約車位（可單選或雙選去回程）
                 </h3>
-                <button
-                  onClick={() => setBookingOffer(null)}
-                  className="text-stone-400 hover:text-stone-600 text-xl font-bold cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-              <p className="text-xs text-stone-500 mt-1">
-                車主：{bookingOffer.driverName} • 出發地：{bookingOffer.departureCity}{bookingOffer.departureDistrict}
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmitBooking} className="space-y-3.5 text-sm">
-              <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 text-xs text-amber-900 space-y-1">
-                <div><strong>出發時間：</strong>{bookingOffer.departureTime}</div>
-                <div><strong>集合地點：</strong>{bookingOffer.departurePoint}</div>
-                <div><strong>剩餘座位：</strong>{bookingOffer.availableSeats} 位</div>
-              </div>
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1 text-xs">
-                  搭乘者姓名 / 法名 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="例：陳大德 或 妙音居士"
-                  value={passengerName}
-                  onChange={(e) => setPassengerName(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1 text-xs">
-                  聯絡電話 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="例：0912-345-678"
-                  value={passengerPhone}
-                  onChange={(e) => setPassengerPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
-                />
-                <p className="text-[11px] text-stone-400 mt-1">
-                  電話僅供車主行前聯繫集合事宜，不對外公開。
+                <p className="text-xs text-stone-500 mt-0.5">
+                  車主：{bookingOffer.driverName} • {bookingOffer.departureArea}
                 </p>
               </div>
+              <button
+                onClick={() => setBookingOffer(null)}
+                className="text-stone-400 hover:text-stone-600 text-xl font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div>
-                <label className="block text-stone-700 font-medium mb-1 text-xs">
-                  搭乘人數 (含本人) <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={seatCount}
-                  onChange={(e) => setSeatCount(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
-                >
-                  {Array.from({ length: Math.min(bookingOffer.availableSeats, 4) }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {n} 位
-                    </option>
-                  ))}
-                </select>
+            <form onSubmit={handleSubmitBooking} className="space-y-4 text-xs md:text-sm">
+              {/* Leg Selection with Role */}
+              <div className="space-y-2.5 bg-stone-50 p-3.5 rounded-xl border border-stone-200">
+                <div className="font-bold text-stone-800 text-xs flex items-center justify-between">
+                  <span>請勾選欲搭乘的行程：</span>
+                  <span className="text-amber-800 text-[11px]">可依義工/正行身份靈活搭配</span>
+                </div>
+
+                {/* Outbound Checkbox */}
+                {bookingOffer.hasOutbound && (
+                  <div
+                    className={`p-2.5 rounded-lg border transition-all ${
+                      bookOutbound ? 'bg-amber-50/80 border-amber-300' : 'bg-white border-stone-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                        <input
+                          type="checkbox"
+                          checked={bookOutbound}
+                          disabled={bookingOffer.outboundAvailableSeats <= 0}
+                          onChange={(e) => setBookOutbound(e.target.checked)}
+                          className="w-4 h-4 text-amber-600 rounded border-stone-300 focus:ring-amber-500"
+                        />
+                        <span>🚙 預約【去程】前往空山寺 ({bookingOffer.outboundTime})</span>
+                      </label>
+                      <span className="text-[11px] text-stone-500">
+                        剩 {bookingOffer.outboundAvailableSeats} 位
+                      </span>
+                    </div>
+
+                    {bookOutbound && (
+                      <div className="mt-2 pl-6 flex items-center gap-3 text-xs">
+                        <span className="text-stone-600">您的去程身份：</span>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="outboundRole"
+                            checked={outboundRole === 'volunteer'}
+                            onChange={() => setOutboundRole('volunteer')}
+                            className="text-amber-600"
+                          />
+                          <span className="text-orange-800 font-semibold">義工組（早到出坡）</span>
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="outboundRole"
+                            checked={outboundRole === 'attendee'}
+                            onChange={() => setOutboundRole('attendee')}
+                            className="text-amber-600"
+                          />
+                          <span className="text-emerald-800 font-semibold">正行組（參讚法會）</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Return Checkbox */}
+                {bookingOffer.hasReturn && (
+                  <div
+                    className={`p-2.5 rounded-lg border transition-all ${
+                      bookReturn ? 'bg-amber-50/80 border-amber-300' : 'bg-white border-stone-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                        <input
+                          type="checkbox"
+                          checked={bookReturn}
+                          disabled={bookingOffer.returnAvailableSeats <= 0}
+                          onChange={(e) => setBookReturn(e.target.checked)}
+                          className="w-4 h-4 text-amber-600 rounded border-stone-300 focus:ring-amber-500"
+                        />
+                        <span>🚗 預約【回程】返回市區 ({bookingOffer.returnTime})</span>
+                      </label>
+                      <span className="text-[11px] text-stone-500">
+                        剩 {bookingOffer.returnAvailableSeats} 位
+                      </span>
+                    </div>
+
+                    {bookReturn && (
+                      <div className="mt-2 pl-6 flex items-center gap-3 text-xs">
+                        <span className="text-stone-600">您的回程身份：</span>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="returnRole"
+                            checked={returnRole === 'attendee'}
+                            onChange={() => setReturnRole('attendee')}
+                            className="text-amber-600"
+                          />
+                          <span className="text-emerald-800 font-semibold">正行組（法會後即回）</span>
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="returnRole"
+                            checked={returnRole === 'volunteer'}
+                            onChange={() => setReturnRole('volunteer')}
+                            className="text-amber-600"
+                          />
+                          <span className="text-orange-800 font-semibold">義工組（善後圓滿走）</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Passenger Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-700 font-medium mb-1 text-xs">
+                    同修姓名 / 法名 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="例：陳大德 或 妙心居士"
+                    value={passengerName}
+                    onChange={(e) => setPassengerName(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-700 font-medium mb-1 text-xs">
+                    美東手機號碼 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="例：917-123-4567"
+                    value={passengerPhone}
+                    onChange={(e) => setPassengerPhone(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-700 font-medium mb-1 text-xs">
+                    微信 WeChat ID 或 LINE (選填)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="方便車主建立共乘小組群"
+                    value={wechatOrLine}
+                    onChange={(e) => setWechatOrLine(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-700 font-medium mb-1 text-xs">
+                    搭乘人數 (含本人) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={seatCount}
+                    onChange={(e) => setSeatCount(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
+                  >
+                    {[1, 2, 3, 4].map((n) => (
+                      <option key={n} value={n}>
+                        {n} 位同修
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
                 <label className="block text-stone-700 font-medium mb-1 text-xs">
-                  備註說明 (選填)
+                  特殊備註 (選填)
                 </label>
                 <input
                   type="text"
-                  placeholder="例：有長輩行動稍緩、需自備輪椅等..."
+                  placeholder="例：有年邁長輩隨行、攜帶海青、可在附近路口上車..."
                   value={pickupNote}
                   onChange={(e) => setPickupNote(e.target.value)}
                   className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
@@ -484,7 +781,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                   type="submit"
                   className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-xs cursor-pointer"
                 >
-                  確認預約
+                  確認預約此車
                 </button>
               </div>
             </form>
@@ -494,25 +791,25 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
 
       {/* Booking Success Confirmation Modal */}
       {bookingSuccessInfo && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-100 text-center space-y-4 animate-in fade-in zoom-in-95">
             <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
               <ShieldCheck className="w-8 h-8" />
             </div>
 
             <div>
-              <h3 className="text-xl font-bold text-stone-900">預約成功！阿彌陀佛</h3>
+              <h3 className="text-xl font-black text-stone-900">車位預約成功！阿彌陀佛</h3>
               <p className="text-xs text-stone-500 mt-1">
-                已為您保留車位，請記下車主聯絡資訊以便行前聯繫
+                已為您保留車位，請妥善記錄車主聯繫資訊
               </p>
             </div>
 
-            <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 text-left space-y-2 text-xs md:text-sm">
-              <div className="flex items-center justify-between border-b border-amber-200/50 pb-2">
+            <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 text-left space-y-2 text-xs">
+              <div className="flex items-center justify-between border-b border-amber-200/60 pb-1.5">
                 <span className="text-stone-500">車主姓名</span>
                 <span className="font-bold text-stone-800">{bookingSuccessInfo.driverName}</span>
               </div>
-              <div className="flex items-center justify-between border-b border-amber-200/50 pb-2">
+              <div className="flex items-center justify-between border-b border-amber-200/60 pb-1.5">
                 <span className="text-stone-500">車主電話</span>
                 <a
                   href={`tel:${bookingSuccessInfo.driverPhone}`}
@@ -522,17 +819,18 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                   {bookingSuccessInfo.driverPhone}
                 </a>
               </div>
-              <div className="flex items-center justify-between border-b border-amber-200/50 pb-2">
-                <span className="text-stone-500">集合時間</span>
-                <span className="font-bold text-stone-800">{bookingSuccessInfo.departureTime} 集合</span>
+              {bookingSuccessInfo.wechatOrLine && (
+                <div className="flex items-center justify-between border-b border-amber-200/60 pb-1.5">
+                  <span className="text-stone-500">微信/LINE</span>
+                  <span className="font-bold text-stone-800">{bookingSuccessInfo.wechatOrLine}</span>
+                </div>
+              )}
+              <div className="flex items-start justify-between border-b border-amber-200/60 pb-1.5">
+                <span className="text-stone-500 shrink-0">集合地點</span>
+                <span className="font-bold text-stone-800 text-right">{bookingSuccessInfo.pickupPoint}</span>
               </div>
-              <div className="flex items-center justify-between border-b border-amber-200/50 pb-2">
-                <span className="text-stone-500">集合地點</span>
-                <span className="font-bold text-stone-800 text-right">{bookingSuccessInfo.departurePoint}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-stone-500">搭乘車款</span>
-                <span className="font-medium text-stone-700">{bookingSuccessInfo.carModel}</span>
+              <div className="pt-1 text-stone-700 font-medium">
+                <strong>行程明細：</strong>{bookingSuccessInfo.details}
               </div>
             </div>
 
@@ -540,20 +838,20 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
               onClick={() => setBookingSuccessInfo(null)}
               className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-xs cursor-pointer"
             >
-              我知道了，感謝同修成就
+              感恩同修成就，我已記下資訊
             </button>
           </div>
         </div>
       )}
 
-      {/* Request Modal (When no suitable ride found) */}
+      {/* Request Modal */}
       {isRequestModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-stone-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-stone-900">
-                  登記共乘需求
+                  登記搭乘需求（無車位協調）
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
                   若無順路車輛，填寫後交通組或順路車主將為您協助媒合
@@ -570,37 +868,23 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             {requestSubmitted ? (
               <div className="py-8 text-center space-y-3">
                 <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
-                <h4 className="text-base font-bold text-stone-800">登記成功！</h4>
+                <h4 className="text-base font-bold text-stone-800">登記成功！阿彌陀佛</h4>
                 <p className="text-xs text-stone-500">
-                  您的需求已送至交通組媒合看板，一旦有車主接送將電話通知您。
+                  您的需求已送至空山寺交通組，一旦有相應車次將主動聯繫您。
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleSubmitRequest} className="space-y-3.5 text-sm">
+              <form onSubmit={handleSubmitRequest} className="space-y-3.5 text-xs md:text-sm">
                 <div>
                   <label className="block text-stone-700 font-medium mb-1 text-xs">
-                    您的姓名 / 法名 <span className="text-red-500">*</span>
+                    同修姓名 / 法名 <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="例：林大德 或 蓮池居士"
+                    placeholder="例：王居士"
                     value={reqName}
                     onChange={(e) => setReqName(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-stone-700 font-medium mb-1 text-xs">
-                    聯絡手機號碼 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="例：0987-654-321"
-                    value={reqPhone}
-                    onChange={(e) => setReqPhone(e.target.value)}
                     className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
                   />
                 </div>
@@ -608,71 +892,138 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-stone-700 font-medium mb-1 text-xs">
-                      期望上車縣市 <span className="text-red-500">*</span>
+                      美東電話 <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={reqCity}
-                      onChange={(e) => setReqCity(e.target.value)}
+                    <input
+                      type="tel"
+                      required
+                      placeholder="例：917-000-1111"
+                      value={reqPhone}
+                      onChange={(e) => setReqPhone(e.target.value)}
                       className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
-                    >
-                      <option value="新北市">新北市</option>
-                      <option value="台北市">台北市</option>
-                      <option value="桃園市">桃園市</option>
-                      <option value="基隆市">基隆市</option>
-                    </select>
+                    />
                   </div>
 
                   <div>
                     <label className="block text-stone-700 font-medium mb-1 text-xs">
-                      行政區 <span className="text-red-500">*</span>
+                      微信 WeChat (選填)
                     </label>
                     <input
                       type="text"
-                      required
-                      placeholder="例：三峽區、板橋區"
-                      value={reqDistrict}
-                      onChange={(e) => setReqDistrict(e.target.value)}
+                      placeholder="微信 ID"
+                      value={reqWechat}
+                      onChange={(e) => setReqWechat(e.target.value)}
                       className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
                     />
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-stone-700 font-medium mb-1 text-xs">
+                      期望上車區域 <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={reqArea}
+                      onChange={(e) => setReqArea(e.target.value)}
+                      className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
+                    >
+                      {EAST_COAST_AREAS.filter((a) => a !== '全美東區域').map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 font-medium mb-1 text-xs">
+                      需求人數 <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={reqCount}
+                      onChange={(e) => setReqCount(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
+                    >
+                      {[1, 2, 3, 4].map((n) => (
+                        <option key={n} value={n}>
+                          {n} 位
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-stone-700 font-medium mb-1 text-xs">
-                    期望上車地點或捷運站
+                    詳細上車地點期望
                   </label>
                   <input
                     type="text"
-                    placeholder="例：永寧捷運站 2 號出口 或 恩主公醫院前"
+                    placeholder="例：緬街圖書館、八大道地鐵站出口..."
                     value={reqPoint}
                     onChange={(e) => setReqPoint(e.target.value)}
                     className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-stone-700 font-medium mb-1 text-xs">
-                    需要座位數 <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={reqCount}
-                    onChange={(e) => setReqCount(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
-                  >
-                    <option value={1}>1 位</option>
-                    <option value={2}>2 位</option>
-                    <option value={3}>3 位</option>
-                    <option value={4}>4 位</option>
-                  </select>
+                {/* Need Outbound & Role */}
+                <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                      <input
+                        type="checkbox"
+                        checked={reqNeedOutbound}
+                        onChange={(e) => setReqNeedOutbound(e.target.checked)}
+                        className="w-4 h-4 text-amber-600 rounded border-stone-300"
+                      />
+                      <span>需要【去程】車位</span>
+                    </label>
+
+                    {reqNeedOutbound && (
+                      <select
+                        value={reqOutboundRole}
+                        onChange={(e) => setReqOutboundRole(e.target.value as ParticipantRole)}
+                        className="text-xs border border-stone-300 rounded px-2 py-1 font-semibold"
+                      >
+                        <option value="volunteer">義工身份（早到出坡）</option>
+                        <option value="attendee">正行身份（參加法會）</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Need Return & Role */}
+                  <div className="flex items-center justify-between pt-1 border-t border-stone-200/60">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-stone-900">
+                      <input
+                        type="checkbox"
+                        checked={reqNeedReturn}
+                        onChange={(e) => setReqNeedReturn(e.target.checked)}
+                        className="w-4 h-4 text-amber-600 rounded border-stone-300"
+                      />
+                      <span>需要【回程】車位</span>
+                    </label>
+
+                    {reqNeedReturn && (
+                      <select
+                        value={reqReturnRole}
+                        onChange={(e) => setReqReturnRole(e.target.value as ParticipantRole)}
+                        className="text-xs border border-stone-300 rounded px-2 py-1 font-semibold"
+                      >
+                        <option value="attendee">正行身份（法會結束回）</option>
+                        <option value="volunteer">義工身份（善後圓滿回）</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-stone-700 font-medium mb-1 text-xs">
-                    補充備註 (選填)
+                    補充說明
                   </label>
                   <input
                     type="text"
-                    placeholder="例：行動稍微不便、可配合提早出發..."
+                    placeholder="例：有長輩隨行、時間彈性可配合車主..."
                     value={reqNotes}
                     onChange={(e) => setReqNotes(e.target.value)}
                     className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-hidden focus:border-amber-500"
@@ -691,7 +1042,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                     type="submit"
                     className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold shadow-xs cursor-pointer"
                   >
-                    送出需求登記
+                    送出登記
                   </button>
                 </div>
               </form>
