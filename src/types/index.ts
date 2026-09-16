@@ -1,15 +1,25 @@
-export type ParticipantRole = 'volunteer' | 'attendee'; // 義工 (提早到/晚走) | 正行 (法會共修)
+export type ParticipantRole = 'volunteer' | 'attendee'; // 義工 (提早到協助) | 正行 (活動參加者)
+
+export interface ScheduleItem {
+  time: string;
+  activity: string;
+  detail?: string;
+  highlight?: boolean;
+}
 
 export interface Event {
   id: string;
   title: string;
+  theme: string;
   subtitle: string;
   date: string;
   templeName: string;
   location: string;
-  volunteerArrivalTime: string; // 義工集結時間
-  attendeeArrivalTime: string;  // 正行集結時間
+  volunteerArrivalTime: string; // 義工集合時間 (如 08:00 前)
+  attendeeArrivalTime: string;  // 正行參加者集合時間 (09:00~09:30 入寺)
   assemblyNotes: string;
+  schedule: ScheduleItem[];
+  reminders: string[];
 }
 
 export interface BookingPassenger {
@@ -18,7 +28,7 @@ export interface BookingPassenger {
   phone: string;
   wechatOrLine?: string;
   passengerCount: number;
-  role: ParticipantRole; // 該程是義工或正行
+  role: ParticipantRole;
   pickupNote?: string;
   bookedAt: string;
 }
@@ -29,8 +39,8 @@ export interface CarpoolOffer {
   driverName: string;
   driverPhone: string;
   wechatOrLine?: string;
-  departureArea: string; // 美東主要集結區 (如：法拉盛 Flushing、曼哈頓華埠、布魯克林、新澤西 Fort Lee/Edison 等)
-  departurePoint: string; // 具體集合點 (如：法拉盛緬街喜來登門口、八大道60街)
+  departureArea: string;
+  departurePoint: string;
   carModel: string;
   carColor?: string;
   plateNumber?: string;
@@ -38,15 +48,15 @@ export interface CarpoolOffer {
 
   // 去程 (前往空山寺 174 Hynes RD, Poughquag, NY)
   hasOutbound: boolean;
-  outboundTime: string; // 如：06:30
-  outboundMode: 'volunteer' | 'attendee' | 'both'; // 該去程車次主要服務義工或正行
+  outboundTime: string;
+  outboundMode: 'volunteer' | 'attendee' | 'both';
   outboundTotalSeats: number;
   outboundAvailableSeats: number;
   outboundPassengers: BookingPassenger[];
 
-  // 回程 (由空山寺返回出發地)
+  // 回程 (返回出發地)
   hasReturn: boolean;
-  returnTime: string; // 如：16:30 或 18:00
+  returnTime: string;
   returnMode: 'volunteer' | 'attendee' | 'both';
   returnTotalSeats: number;
   returnAvailableSeats: number;
@@ -67,11 +77,11 @@ export interface RideRequest {
   
   // 去程需求
   needOutbound: boolean;
-  outboundRole: ParticipantRole; // 去程身份：義工(早到) 或 正行
+  outboundRole: ParticipantRole;
 
   // 回程需求
   needReturn: boolean;
-  returnRole: ParticipantRole;   // 回程身份：義工(晚走) 或 正行(法會後即回)
+  returnRole: ParticipantRole;
 
   notes?: string;
   status: 'pending' | 'matched_partial' | 'matched_full' | 'cancelled';

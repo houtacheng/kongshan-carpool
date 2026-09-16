@@ -295,16 +295,16 @@ export function App() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-stone-200 bg-white py-6 text-center text-xs text-stone-500 space-y-2 mt-12">
-        <div className="flex items-center justify-center gap-2 font-bold text-stone-800">
-          <img src="/kongshan_logo.png" alt="空山" className="w-5 h-5 object-contain bg-black rounded" />
-          <span>空山寺 (Kong Shan Temple) • 美東中秋法會共乘服務網</span>
+      <footer className="border-t border-stone-200 bg-white py-8 text-center text-xs md:text-sm text-stone-600 space-y-2 mt-16">
+        <div className="flex items-center justify-center gap-2 font-black text-stone-900 text-sm md:text-base">
+          <img src="/kongshan_logo.png" alt="空山" className="w-6 h-6 object-contain bg-black rounded-md" />
+          <span>空山寺 (Kong Shan Temple) • 美東中秋共乘服務網</span>
         </div>
-        <p className="text-stone-400 flex items-center justify-center gap-1">
-          <MapPin className="w-3.5 h-3.5 text-amber-700" />
+        <p className="text-stone-500 flex flex-wrap items-center justify-center gap-1 font-medium">
+          <MapPin className="w-4 h-4 text-amber-700" />
           <span>174 Hynes RD, Poughquag, NY 12570</span>
           <span>•</span>
-          <span>隨喜十方大德護持發心 • 同車同行 共赴菩提法筵 • 阿彌陀佛</span>
+          <span>共乘互助同行 • 彼此照應 • 圓滿順利</span>
         </p>
       </footer>
     </div>
