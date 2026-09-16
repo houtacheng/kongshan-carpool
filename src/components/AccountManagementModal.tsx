@@ -245,6 +245,23 @@ export const AccountManagementModal: React.FC<AccountManagementModalProps> = ({
                 </div>
               </div>
 
+              {/* Dynamic Role Permission Guide Box */}
+              <div className="p-3 bg-white rounded-xl border border-amber-200/80 text-xs space-y-1">
+                <div className="font-bold text-stone-800 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-amber-700" />
+                  <span>{language === 'en' ? 'Selected Role Permissions:' : '所選角色權限範圍：'}</span>
+                </div>
+                {newRole === 'staff' ? (
+                  <p className="text-emerald-800 font-medium leading-relaxed text-[11px]">
+                    ✅ <strong>報名報到組組長</strong>：具備<strong>【法會營隊管理】</strong>（可新增、修改、發布或隱藏法會營隊）、<strong>【車輛與需求調度】</strong>、<strong>【信眾聯絡方式查看】</strong>及<strong>【名冊匯出列印】</strong>之完整權限。
+                  </p>
+                ) : (
+                  <p className="text-purple-900 font-medium leading-relaxed text-[11px]">
+                    👑 <strong>系統管理員</strong>：具備全系統最高權限，包含<strong>【法會營隊管理】</strong>、<strong>【全場車隊調度】</strong>，以及<strong>【後台組長帳號授權、審核與權限管理】</strong>。
+                  </p>
+                )}
+              </div>
+
               <div className="flex justify-end pt-2">
                 <button
                   type="submit"
@@ -255,6 +272,47 @@ export const AccountManagementModal: React.FC<AccountManagementModalProps> = ({
               </div>
             </form>
           )}
+
+          {/* Permission Matrix Card */}
+          <div className="bg-gradient-to-r from-amber-50 to-stone-50 border border-amber-200/70 rounded-2xl p-4 text-xs space-y-2.5">
+            <div className="font-black text-amber-950 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-amber-700" />
+                <span className="text-sm">{language === 'en' ? 'Permission Roster Guide' : '後台角色權限規範說明'}</span>
+              </div>
+              <span className="text-[11px] bg-amber-200/60 text-amber-900 px-2 py-0.5 rounded-md font-bold">
+                {language === 'en' ? 'Team Leaders have Event Management Authority' : '組長具備法會管理權限'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+              <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs space-y-1">
+                <div className="font-black text-purple-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  <span>👑 {t.accountRoleSuperAdmin}</span>
+                </div>
+                <ul className="space-y-1 text-stone-600 pl-3.5 list-disc">
+                  <li><strong>法會營隊管理</strong>（新增、修改、發布、刪除）</li>
+                  <li><strong>全場車輛與搭乘調度</strong>（乘客入席、異動彈出）</li>
+                  <li><strong>信眾個人電話與通訊軟體</strong>完整檢視</li>
+                  <li><strong className="text-purple-900">後台組長帳號名冊審核與權限賦予</strong></li>
+                </ul>
+              </div>
+
+              <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-2xs space-y-1">
+                <div className="font-black text-blue-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span>🛡️ {t.accountRoleStaff}</span>
+                </div>
+                <ul className="space-y-1 text-stone-600 pl-3.5 list-disc">
+                  <li><strong className="text-emerald-800">法會營隊管理</strong>（新增、修改、發布、刪除）</li>
+                  <li><strong>全場車輛與搭乘調度</strong>（乘客入席、異動彈出）</li>
+                  <li><strong>信眾個人電話與通訊軟體</strong>完整檢視</li>
+                  <li>名冊列印與 CSV 資料匯出</li>
+                </ul>
+              </div>
+            </div>
+          </div>
 
           {/* Accounts List */}
           <div className="space-y-3">

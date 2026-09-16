@@ -863,6 +863,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <button
               onClick={() => setShowEventModal(true)}
               className="flex items-center gap-1.5 px-3 py-2 bg-amber-800 hover:bg-amber-700 text-amber-100 border border-amber-600/50 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
+              title={language === 'en' ? 'Manage Temple Events (Team Leader & Admin authorized)' : '🎪 法會營隊管理（報名報到組組長與系統管理員皆可管理）'}
             >
               <Calendar className="w-4 h-4 text-amber-300" />
               <span>{t.eventManagementBtn}</span>

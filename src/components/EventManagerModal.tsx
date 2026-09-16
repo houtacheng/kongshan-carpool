@@ -157,11 +157,18 @@ export const EventManagerModal: React.FC<EventManagerModalProps> = ({
           {!isEditing && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-amber-50/60 p-4 rounded-2xl border border-amber-200/70">
               <div>
-                <h4 className="text-sm font-black text-amber-950">
-                  {language === 'en' ? 'Temple Carpool Events Master' : '空山寺法會營隊共乘清單'}
-                </h4>
-                <p className="text-xs text-amber-800 font-medium mt-0.5">
-                  {language === 'en' ? 'Manage multiple seasonal retreats, camps, and gatherings with independent fleets.' : '支援多梯次季節法會、精進營隊與普茶活動，各活動車隊與需求獨立管理。'}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-black text-amber-950">
+                    {language === 'en' ? 'Temple Carpool Events Master' : '空山寺法會營隊共乘清單'}
+                  </h4>
+                  <span className="text-[10px] bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full font-bold border border-amber-300">
+                    {language === 'en' ? 'Team Leaders & Admins Authorized' : '🛡️ 組長與管理員全權管理'}
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 font-medium mt-1">
+                  {language === 'en'
+                    ? 'Registration team leaders & administrators can create, edit, schedule, publish, or hide seasonal retreat carpools.'
+                    : '報名報到組組長與系統管理員皆具備完整權限，可自由新增、修改內容、公開發布或內部隱藏法會營隊。'}
                 </p>
               </div>
 

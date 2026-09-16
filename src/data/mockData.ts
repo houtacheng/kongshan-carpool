@@ -22,7 +22,7 @@ export const INITIAL_ADMIN_ACCOUNTS: AdminAccount[] = [
     authProvider: 'google',
     registeredAt: '2026-09-01 10:00',
     lastLoginAt: '2026-09-16 06:30',
-    note: '系統最高權限（可管理帳號權限與所有營隊）'
+    note: '系統最高權限（可管理後台帳號名冊與全系統功能）'
   }
 ];
 
