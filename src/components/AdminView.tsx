@@ -10,7 +10,13 @@ import {
   UserPlus,
   Phone,
   MapPin,
-  Send
+  Send,
+  Lock,
+  LogOut,
+  Sparkles,
+  Wand2,
+  ThumbsUp,
+  KeyRound
 } from 'lucide-react';
 
 interface AdminViewProps {
@@ -30,6 +36,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onCreateOffer,
   onCreateRequest,
 }) => {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('kongshan_checkin_auth') === 'true';
+  });
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   const currentOffers = offers.filter((o) => o.eventId === currentEvent.id);
   const currentRequests = requests.filter((r) => r.eventId === currentEvent.id);
   const pendingRequests = currentRequests.filter((r) => r.status !== 'matched_full');
@@ -65,6 +79,170 @@ export const AdminView: React.FC<AdminViewProps> = ({
   );
   const totalPendingPassengers = pendingRequests.reduce((sum, r) => sum + r.passengerCount, 0);
 
+  // --- SMART SUGGESTED MATCHING ALGORITHM ---
+  interface SuggestedMatch {
+    requestId: string;
+    offerId: string;
+    offer: CarpoolOffer;
+    leg: 'outbound' | 'return' | 'both';
+    score: number;
+    reason: string;
+  }
+
+  const findBestSuggestion = (req: RideRequest): SuggestedMatch | null => {
+    let bestMatch: SuggestedMatch | null = null;
+    let maxScore = -1;
+
+    for (const offer of currentOffers) {
+      let score = 0;
+      const reasons: string[] = [];
+
+      // 1. Same area matching
+      if (offer.departureArea === req.pickupArea) {
+        score += 50;
+        reasons.push('同出發區域');
+      } else if (
+        offer.departureArea.includes(req.pickupArea.split(' ')[0]) ||
+        req.pickupArea.includes(offer.departureArea.split(' ')[0])
+      ) {
+        score += 30;
+        reasons.push('相鄰生活圈');
+      }
+
+      // 2. Leg & Seats check
+      const canOutbound =
+        req.needOutbound &&
+        offer.hasOutbound &&
+        offer.outboundAvailableSeats >= req.passengerCount;
+
+      const canReturn =
+        req.needReturn &&
+        offer.hasReturn &&
+        offer.returnAvailableSeats >= req.passengerCount;
+
+      if (!canOutbound && !canReturn) {
+        continue; // Cannot fit either leg
+      }
+
+      let matchLeg: 'outbound' | 'return' | 'both' = 'both';
+
+      if (canOutbound && canReturn) {
+        score += 40;
+        reasons.push('去回雙程皆可搭乘');
+        matchLeg = 'both';
+      } else if (canOutbound) {
+        score += 20;
+        reasons.push('可接送去程');
+        matchLeg = 'outbound';
+      } else {
+        score += 20;
+        reasons.push('可接送回程');
+        matchLeg = 'return';
+      }
+
+      // 3. Role compatibility
+      if (canOutbound) {
+        if (offer.outboundMode === req.outboundRole || offer.outboundMode === 'both') {
+          score += 15;
+          reasons.push(req.outboundRole === 'volunteer' ? '符合義工早車' : '符合正行時間');
+        }
+      }
+
+      if (canReturn) {
+        if (offer.returnMode === req.returnRole || offer.returnMode === 'both') {
+          score += 15;
+          reasons.push(req.returnRole === 'volunteer' ? '符合善後返程' : '符合活動結束即回');
+        }
+      }
+
+      if (score > maxScore) {
+        maxScore = score;
+        bestMatch = {
+          requestId: req.id,
+          offerId: offer.id,
+          offer,
+          leg: matchLeg,
+          score,
+          reason: reasons.join(' • '),
+        };
+      }
+    }
+
+    return bestMatch;
+  };
+
+  // Pre-calculate suggestions for all pending requests
+  const suggestionsMap: { [reqId: string]: SuggestedMatch } = {};
+  pendingRequests.forEach((req) => {
+    const sug = findBestSuggestion(req);
+    if (sug) {
+      suggestionsMap[req.id] = sug;
+    }
+  });
+
+  const totalSuggestionsCount = Object.keys(suggestionsMap).length;
+
+  // Handler: Apply one suggestion
+  const handleApplySuggestion = (sug: SuggestedMatch) => {
+    const success = onMatchRequestToOffer(sug.requestId, sug.offerId, sug.leg);
+    if (success) {
+      alert(`已成功採納建議，將乘客指派至 ${sug.offer.driverName} 的車輛！`);
+    } else {
+      alert('該車次剩餘座位不足，無法排入。');
+    }
+  };
+
+  // Handler: Apply ALL suggestions in batch
+  const handleApplyAllSuggestions = () => {
+    if (totalSuggestionsCount === 0) {
+      alert('目前沒有可自動配對的建議。');
+      return;
+    }
+
+    if (!confirm(`系統即將自動為 ${totalSuggestionsCount} 位乘客套用最佳車位配對，是否確認？`)) {
+      return;
+    }
+
+    let successCount = 0;
+    for (const req of pendingRequests) {
+      const sug = suggestionsMap[req.id];
+      if (sug) {
+        const ok = onMatchRequestToOffer(sug.requestId, sug.offerId, sug.leg);
+        if (ok) successCount++;
+      }
+    }
+
+    alert(`智慧媒合完成！成功配對 ${successCount} 筆乘客名單。`);
+  };
+
+  // Login handler
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      (username.trim().toLowerCase() === 'admin' || username.trim() === '報名報到組') &&
+      (password === 'kongshan2026' || password === '1234')
+    ) {
+      setIsAuthenticated(true);
+      localStorage.setItem('kongshan_checkin_auth', 'true');
+      setLoginError('');
+    } else {
+      setLoginError('帳號或密碼錯誤！請使用預設幹部帳號：admin / 密碼：kongshan2026');
+    }
+  };
+
+  // Quick Demo Login
+  const handleQuickLogin = () => {
+    setIsAuthenticated(true);
+    localStorage.setItem('kongshan_checkin_auth', 'true');
+    setLoginError('');
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('kongshan_checkin_auth');
+  };
+
   const handleManualAssign = (requestId: string) => {
     const targetOfferId = selectedOfferMap[requestId];
     const targetLeg = selectedLegMap[requestId] || 'both';
@@ -91,7 +269,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     if (phoneType === 'need-ride') {
       onCreateRequest({
         eventId: currentEvent.id,
-        passengerName: `${elderlyName.trim()} (交通組代報)`,
+        passengerName: `${elderlyName.trim()} (報名報到組代報)`,
         passengerPhone: elderlyPhone.trim(),
         wechatOrLine: elderlyWechat.trim() || undefined,
         pickupArea: elderlyArea,
@@ -101,13 +279,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
         outboundRole: elderlyOutboundRole,
         needReturn: true,
         returnRole: elderlyReturnRole,
-        notes: elderlyNotes.trim() ? `[代報] ${elderlyNotes.trim()}` : '[交通組電話代錄]',
+        notes: elderlyNotes.trim() ? `[代報] ${elderlyNotes.trim()}` : '[報名報到組電話代錄]',
       });
       alert('已成功登記搭乘需求！');
     } else {
       onCreateOffer({
         eventId: currentEvent.id,
-        driverName: `${elderlyName.trim()} (交通組代報)`,
+        driverName: `${elderlyName.trim()} (報名報到組代報)`,
         driverPhone: elderlyPhone.trim(),
         wechatOrLine: elderlyWechat.trim() || undefined,
         departureArea: elderlyArea,
@@ -120,7 +298,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         outboundTotalSeats: elderlyCount,
         outboundAvailableSeats: elderlyCount,
         hasReturn: true,
-        returnTime: elderlyReturnRole === 'volunteer' ? '18:00 義工善後' : '16:30 活動後即回',
+        returnTime: elderlyReturnRole === 'volunteer' ? '16:30 善後後回' : '15:30 活動結束即回',
         returnMode: elderlyReturnRole,
         returnTotalSeats: elderlyCount,
         returnAvailableSeats: elderlyCount,
@@ -138,8 +316,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const handleExportCSV = () => {
     const rows = [
       ['活動名稱', currentEvent.title],
+      ['活動主題', currentEvent.theme],
       ['活動日期', currentEvent.date],
       ['活動地點', `${currentEvent.templeName} (${currentEvent.location})`],
+      ['負責組別', '空山寺 報名報到組'],
       [''],
       [
         '行程類別',
@@ -250,15 +430,100 @@ export const AdminView: React.FC<AdminViewProps> = ({
     document.body.removeChild(link);
   };
 
+  // --- RENDER LOGIN VIEW IF NOT AUTHENTICATED ---
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-md mx-auto py-8 px-4 animate-in fade-in">
+        <div className="bg-white rounded-3xl border border-amber-200 p-6 md:p-8 shadow-xl space-y-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto border border-amber-200">
+            <Lock className="w-8 h-8 text-amber-800" />
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-stone-900 tracking-tight">
+              報名報到組幹部後台
+            </h2>
+            <p className="text-xs md:text-sm text-stone-500 mt-1 font-medium">
+              請輸入管理帳號密碼以進入調度看板
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs md:text-sm p-3 rounded-xl font-bold">
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4 text-left">
+            <div>
+              <label className="block text-stone-800 text-xs md:text-sm font-bold mb-1.5">
+                幹部帳號
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="請輸入帳號 (例如: admin)"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600 font-medium"
+              />
+            </div>
+
+            <div>
+              <label className="block text-stone-800 text-xs md:text-sm font-bold mb-1.5">
+                安全密碼
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="請輸入密碼 (例如: kongshan2026)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-600 font-medium"
+              />
+            </div>
+
+            <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200 text-xs text-amber-950 font-medium leading-relaxed">
+              💡 <strong>預設測試憑證：</strong>
+              <br />
+              帳號：<code className="bg-white px-1.5 py-0.5 rounded font-bold">admin</code> ｜ 密碼：<code className="bg-white px-1.5 py-0.5 rounded font-bold">kongshan2026</code>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3.5 bg-stone-900 hover:bg-black text-white rounded-xl font-black text-base transition-colors cursor-pointer shadow-xs"
+            >
+              確認登入
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-stone-100">
+            <button
+              onClick={handleQuickLogin}
+              className="w-full py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-bold text-xs md:text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <KeyRound className="w-4 h-4 text-amber-700" />
+              <span>手機快速登入（直接以報名報到組進入）</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- RENDER FULL ADMIN DASHBOARD ---
   return (
     <div className="space-y-6 pb-16">
-      {/* Top Banner */}
+      {/* Top Banner with Logout */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 bg-stone-900 text-stone-100 p-5 md:p-6 rounded-3xl shadow-md">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl md:text-2xl font-black tracking-tight">空山寺交通組調度中樞</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl md:text-2xl font-black tracking-tight">空山寺 報名報到組調度中樞</h2>
             <span className="text-xs bg-amber-500/20 text-amber-300 px-3 py-0.5 rounded-full border border-amber-500/30 font-bold">
               美東總調度
+            </span>
+            <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-bold">
+              幹部已登入
             </span>
           </div>
           <p className="text-xs md:text-sm text-stone-400 mt-1 font-medium">
@@ -288,7 +553,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
           >
             <Printer className="w-4 h-4 text-amber-300" />
-            <span>列印當日名冊</span>
+            <span>列印名冊</span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            title="登出報名報到組後台"
+            className="flex items-center gap-1 px-3 py-2 bg-red-950/60 hover:bg-red-900 text-red-200 border border-red-800/60 rounded-xl text-xs md:text-sm font-bold transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4 text-red-300" />
+            <span>登出</span>
           </button>
         </div>
       </div>
@@ -348,7 +622,34 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
-      {/* Unmatched Requests Center */}
+      {/* --- SMART SUGGESTED MATCHING HERO SECTION --- */}
+      {totalSuggestionsCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-3xl p-5 md:p-6 shadow-md space-y-3 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-6 h-6 text-amber-200" />
+                <h3 className="text-lg md:text-xl font-black tracking-tight">
+                  ✨ 系統智慧建議媒合中心 (Smart Suggestion)
+                </h3>
+              </div>
+              <p className="text-xs md:text-sm text-amber-100 font-medium">
+                系統已根據「同出發區域」、「義工早到/正行需求」與「空位數」，自動計算出最佳推薦方案！
+              </p>
+            </div>
+
+            <button
+              onClick={handleApplyAllSuggestions}
+              className="px-5 py-3 bg-white hover:bg-stone-50 text-orange-900 rounded-2xl font-black text-xs md:text-sm transition-all cursor-pointer shadow-lg hover:scale-102 flex items-center justify-center gap-2 shrink-0"
+            >
+              <Sparkles className="w-4 h-4 text-orange-600" />
+              <span>⚡ 一鍵套用所有建議 ({totalSuggestionsCount} 筆)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Unmatched Requests Center with Smart Suggestions */}
       <div className="bg-white rounded-3xl border border-amber-200 p-5 md:p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-stone-100 pb-3">
           <div>
@@ -357,7 +658,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               待協調乘客名冊 ({pendingRequests.length} 筆)
             </h3>
             <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-              尚未配對之乘客，交通組可依其「義工早到」或「正行」需求，分開指派去程或回程！
+              尚未配對之乘客，報名報到組可直接「採納系統建議」或「手動指派」至相應車次！
             </p>
           </div>
         </div>
@@ -369,99 +670,129 @@ export const AdminView: React.FC<AdminViewProps> = ({
         ) : (
           <div className="divide-y divide-stone-100 border border-stone-200 rounded-2xl overflow-hidden text-xs md:text-sm">
             {pendingRequests.map((req) => {
+              const suggestion = suggestionsMap[req.id];
+
               return (
                 <div
                   key={req.id}
-                  className="p-4 bg-white hover:bg-stone-50/50 flex flex-col md:flex-row md:items-center justify-between gap-3.5"
+                  className="p-4 md:p-5 bg-white hover:bg-stone-50/50 flex flex-col gap-3"
                 >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-black text-base text-stone-900">
-                        {req.passengerName}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded bg-orange-100 text-orange-900 font-bold text-xs">
-                        需求 {req.passengerCount} 位
-                      </span>
-                      <span className="text-stone-500 font-medium">電話：{req.passengerPhone}</span>
-                      {req.wechatOrLine && (
-                        <span className="text-stone-400">微信：{req.wechatOrLine}</span>
-                      )}
-                    </div>
-
-                    <div className="text-stone-700 flex items-center gap-1 font-medium">
-                      <MapPin className="w-4 h-4 text-amber-700 shrink-0" />
-                      <span>
-                        期望地點：<strong className="text-stone-900">{req.pickupArea}</strong> - {req.pickupPoint}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 pt-0.5 text-xs">
-                      {req.needOutbound && (
-                        <span className="px-2.5 py-0.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-bold">
-                          去程需求：{req.outboundRole === 'volunteer' ? '義工組 (08:00前早到)' : '正行組'}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-black text-base md:text-lg text-stone-900">
+                          {req.passengerName}
                         </span>
-                      )}
-                      {req.needReturn && (
-                        <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-stone-800 border border-stone-200 font-bold">
-                          回程需求：{req.returnRole === 'volunteer' ? '義工組 (善後賦歸)' : '正行組 (16:30即回)'}
+                        <span className="px-2.5 py-0.5 rounded bg-orange-100 text-orange-900 font-bold text-xs">
+                          需求 {req.passengerCount} 位
                         </span>
+                        <span className="text-stone-500 font-medium">電話：{req.passengerPhone}</span>
+                        {req.wechatOrLine && (
+                          <span className="text-stone-400">微信：{req.wechatOrLine}</span>
+                        )}
+                      </div>
+
+                      <div className="text-stone-700 flex items-center gap-1 font-medium">
+                        <MapPin className="w-4 h-4 text-amber-700 shrink-0" />
+                        <span>
+                          期望地點：<strong className="text-stone-900">{req.pickupArea}</strong> - {req.pickupPoint}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-0.5 text-xs">
+                        {req.needOutbound && (
+                          <span className="px-2.5 py-0.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-bold">
+                            去程需求：{req.outboundRole === 'volunteer' ? '義工組 (08:00前早到)' : '正行組'}
+                          </span>
+                        )}
+                        {req.needReturn && (
+                          <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-stone-800 border border-stone-200 font-bold">
+                            回程需求：{req.returnRole === 'volunteer' ? '義工組 (善後賦歸)' : '正行組 (15:30即回)'}
+                          </span>
+                        )}
+                      </div>
+
+                      {req.notes && (
+                        <div className="text-stone-600 bg-stone-50 p-2 rounded-xl text-xs">
+                          備註：{req.notes}
+                        </div>
                       )}
                     </div>
 
-                    {req.notes && (
-                      <div className="text-stone-600 bg-stone-50 p-2 rounded-xl text-xs">
-                        備註：{req.notes}
+                    {/* SMART SUGGESTION BADGE & QUICK APPLY */}
+                    {suggestion && (
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-3 text-xs md:text-sm space-y-1.5 md:max-w-sm self-stretch md:self-auto flex flex-col justify-between">
+                        <div className="flex items-center gap-1.5 font-black text-amber-950">
+                          <ThumbsUp className="w-4 h-4 text-amber-700" />
+                          <span>系統推薦最佳車輛：</span>
+                        </div>
+                        <div className="font-bold text-stone-900 text-xs">
+                          🚗 {suggestion.offer.driverName} ({suggestion.offer.departureArea.split(' ')[0]}，{suggestion.leg === 'both' ? '去回雙程' : suggestion.leg === 'outbound' ? '去程' : '回程'})
+                        </div>
+                        <div className="text-[11px] text-amber-900/80 font-medium">
+                          {suggestion.reason}
+                        </div>
+                        <button
+                          onClick={() => handleApplySuggestion(suggestion)}
+                          className="w-full mt-1 py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1 shadow-xs"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>採納此建議指派</span>
+                        </button>
                       </div>
                     )}
                   </div>
 
                   {/* Manual Assignment Controls */}
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <select
-                      value={selectedOfferMap[req.id] || ''}
-                      onChange={(e) =>
-                        setSelectedOfferMap((prev) => ({
-                          ...prev,
-                          [req.id]: e.target.value,
-                        }))
-                      }
-                      className="border border-stone-300 rounded-xl px-3 py-2 text-xs md:text-sm text-stone-900 font-bold focus:outline-hidden focus:border-amber-500 max-w-[220px]"
-                    >
-                      <option value="">-- 選擇愛心車輛 --</option>
-                      {currentOffers.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.driverName} ({o.departureArea.split(' ')[0]}，去餘{o.outboundAvailableSeats}/回餘{o.returnAvailableSeats})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-stone-500 font-medium">或自行手動指派其他車次：</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={selectedOfferMap[req.id] || ''}
+                        onChange={(e) =>
+                          setSelectedOfferMap((prev) => ({
+                            ...prev,
+                            [req.id]: e.target.value,
+                          }))
+                        }
+                        className="border border-stone-300 rounded-xl px-3 py-1.5 text-xs text-stone-900 font-bold focus:outline-hidden focus:border-amber-500 max-w-[200px]"
+                      >
+                        <option value="">-- 手動選擇車輛 --</option>
+                        {currentOffers.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.driverName} ({o.departureArea.split(' ')[0]}，去餘{o.outboundAvailableSeats}/回餘{o.returnAvailableSeats})
+                          </option>
+                        ))}
+                      </select>
 
-                    <select
-                      value={selectedLegMap[req.id] || 'both'}
-                      onChange={(e) =>
-                        setSelectedLegMap((prev) => ({
-                          ...prev,
-                          [req.id]: e.target.value as any,
-                        }))
-                      }
-                      className="border border-stone-300 rounded-xl px-2.5 py-2 text-xs md:text-sm text-stone-800 font-bold"
-                    >
-                      <option value="both">指派去回雙程</option>
-                      <option value="outbound">僅指派去程</option>
-                      <option value="return">僅指派回程</option>
-                    </select>
+                      <select
+                        value={selectedLegMap[req.id] || 'both'}
+                        onChange={(e) =>
+                          setSelectedLegMap((prev) => ({
+                            ...prev,
+                            [req.id]: e.target.value as any,
+                          }))
+                        }
+                        className="border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs text-stone-800 font-bold"
+                      >
+                        <option value="both">指派去回雙程</option>
+                        <option value="outbound">僅指派去程</option>
+                        <option value="return">僅指派回程</option>
+                      </select>
 
-                    <button
-                      onClick={() => handleManualAssign(req.id)}
-                      disabled={!selectedOfferMap[req.id]}
-                      className={`px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs text-xs md:text-sm ${
-                        selectedOfferMap[req.id]
-                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                          : 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                      }`}
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      指派入席
-                    </button>
+                      <button
+                        onClick={() => handleManualAssign(req.id)}
+                        disabled={!selectedOfferMap[req.id]}
+                        className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 cursor-pointer shadow-xs ${
+                          selectedOfferMap[req.id]
+                            ? 'bg-stone-800 hover:bg-black text-white'
+                            : 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <Send className="w-3 h-3" />
+                        手動指派
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -477,7 +808,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <Car className="w-6 h-6 text-amber-700" />
             全場車隊去回程入席調度名冊
           </h3>
-          <span className="text-xs md:text-sm text-stone-500 font-medium">空山寺中秋活動</span>
+          <span className="text-xs md:text-sm text-stone-500 font-medium">空山寺中秋普茶</span>
         </div>
 
         <div className="space-y-4">
@@ -616,7 +947,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   代長輩電話登記
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-                  接獲長輩或朋友電話報名時，交通組可直接在此登打
+                  接獲長輩或朋友電話報名時，報名報到組可直接在此登打
                 </p>
               </div>
               <button
@@ -660,7 +991,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="例：陳阿姨 (由交通組代錄)"
+                  placeholder="例：陳阿姨 (由報名報到組代錄)"
                   value={elderlyName}
                   onChange={(e) => setElderlyName(e.target.value)}
                   className="w-full px-3.5 py-3 border border-stone-300 rounded-xl focus:outline-hidden focus:border-amber-500"

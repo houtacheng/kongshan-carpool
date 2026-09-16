@@ -20,7 +20,8 @@ export const INITIAL_EVENTS: Event[] = [
     date: '2026年9月27日（週日）',
     templeName: '空山寺 (Kong Shan Temple)',
     location: '174 Hynes RD, Poughquag, NY 12570',
-    volunteerArrivalTime: '08:00 前抵達寺院（素烤備料、會場佈置、交通接待）',
+    volunteerArrivalTime: '08:00 前抵達寺院（素烤備料、會場佈置、報名報到組）',
+
     attendeeArrivalTime: '09:00 ~ 09:30 入寺，09:30 湖畔集合',
     assemblyNotes: '午間於湖畔共享素烤盛宴，下午由各班分享學習心得與修學收穫，並進行廣論快問快答。美東各區車程約 1.5 ~ 2 小時，請大家寬裕估算時間。',
     reminders: [
@@ -148,7 +149,7 @@ export const INITIAL_OFFERS: CarpoolOffer[] = [
   {
     id: 'offer-chinatown-1',
     eventId: 'evt-2026-pucha',
-    driverName: '黃先生 (交通接待組)',
+    driverName: '黃先生 (報名報到組)',
     driverPhone: '917-888-9999',
     departureArea: '曼哈頓華埠 Chinatown (NY)',
     departurePoint: '華埠包厘街孔子大廈正門口 (Bowery St)',
@@ -163,7 +164,7 @@ export const INITIAL_OFFERS: CarpoolOffer[] = [
     outboundPassengers: [
       {
         id: 'p-ct-1',
-        name: '李先生 (交通接待義工)',
+        name: '李先生 (報名報到義工)',
         phone: '917-444-1234',
         passengerCount: 2,
         role: 'volunteer',
@@ -179,7 +180,7 @@ export const INITIAL_OFFERS: CarpoolOffer[] = [
     returnPassengers: [
       {
         id: 'p-ct-1',
-        name: '李先生 (交通接待義工)',
+        name: '李先生 (報名報到義工)',
         phone: '917-444-1234',
         passengerCount: 2,
         role: 'volunteer',

@@ -481,7 +481,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
             </div>
             <p className="text-stone-800 font-bold text-base">該區域或時段目前暫無相應車位</p>
             <p className="text-xs md:text-sm text-stone-500 max-w-sm mx-auto leading-relaxed">
-              您可以點擊下方按鈕登記「搭乘需求」，註明您是義工或正行參加者，交通組將為您協調美東車位！
+              您可以點擊下方按鈕登記「搭乘需求」，註明您是義工或正行參加者，報名報到組將為您協調美東車位！
             </p>
             <button
               onClick={() => setIsRequestModalOpen(true)}
@@ -933,7 +933,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                   登記搭乘需求（無車位協調）
                 </h3>
                 <p className="text-xs md:text-sm text-stone-500 mt-0.5 font-medium">
-                  若無順路車輛，填寫後交通組或順路車主將為您協助安排
+                  若無順路車輛，填寫後報名報到組或順路車主將為您協助安排
                 </p>
               </div>
               <button
@@ -949,7 +949,7 @@ export const PassengerView: React.FC<PassengerViewProps> = ({
                 <CheckCircle2 className="w-14 h-14 text-emerald-600 mx-auto" />
                 <h4 className="text-xl font-bold text-stone-900">登記成功！</h4>
                 <p className="text-xs md:text-sm text-stone-600">
-                  您的需求已送至空山寺交通組，一旦有相應車次將主動聯繫您。
+                  您的需求已送至空山寺報名報到組，一旦有相應車次將主動聯繫您。
                 </p>
               </div>
             ) : (

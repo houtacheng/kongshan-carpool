@@ -118,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <ClipboardCheck className="w-5 h-5" />
-            <span>📋 交通組後台</span>
+            <span>📋 報名報到組後台</span>
           </button>
         </div>
       </div>
